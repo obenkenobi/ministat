@@ -540,6 +540,7 @@ struct filechunk_read_payload {
 	int column;
 	const char* row_delim;
 	const char* filename;
+	struct dataset* output_dataset;
 };
 
 static void read_fileline_to_dataset(struct dataset *s, char* line, const char* delim, int column, const char *filename) {
@@ -617,7 +618,9 @@ static struct dataset* fill_filechunk_data(struct filechunk_read_payload* payloa
 }
 
 void* fill_filechunk_data_thread(void* s) {
-	return (void*)fill_filechunk_data((struct filechunk_read_payload*)s);
+	struct filechunk_read_payload* payload = (struct filechunk_read_payload*)s;
+	payload->output_dataset = fill_filechunk_data(payload);
+	return NULL;
 }
 
 static struct dataset *
@@ -651,22 +654,23 @@ ReadSet(const char *n, int column, const char *delim)
 	offset = 0;
 	threads = (pthread_t*)malloc(sizeof(pthread_t)*max_threads);
 	payloads = (struct filechunk_read_payload*)malloc(sizeof(struct filechunk_read_payload)*max_threads);
+	for(int i=0; i < max_threads; i++) {
+		payloads[i].fd = fd;
+		payloads[i].filesize = filesize;
+		payloads[i].column = column;
+		payloads[i].row_delim = delim;
+		payloads[i].filename = n;
+	}
 	while(offset < filesize) {
 		int threads_added;
 		for(threads_added = 0; threads_added < max_threads && offset < filesize; offset += FILECHUNK_BUFFSIZE, threads_added++) {
-			payloads[threads_added].fd = fd;
-			payloads[threads_added].filesize = filesize;
 			payloads[threads_added].offset = offset;
-			payloads[threads_added].column = column;
-			payloads[threads_added].row_delim = delim;
-			payloads[threads_added].filename = n;
 			pthread_create(threads + threads_added, NULL, fill_filechunk_data_thread, (void*)(payloads + threads_added));
 		}
 		for(int i = 0; i < threads_added; i++) {
-			struct dataset* thread_dataset;
-			pthread_join(threads[i], (void**)&thread_dataset);
-			merge_dataset(s, thread_dataset);
-			free(thread_dataset); // to prevent memory leak
+			pthread_join(threads[i], NULL);
+			merge_dataset(s, payloads[i].output_dataset);
+			free(payloads[i].output_dataset); // to prevent memory leak
 		}
 	}
 
