@@ -16,8 +16,15 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h> //NEW HEADER
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/sysinfo.h>
+#include <pthread.h>
 
 #include "queue.h"
+
+#define FILECHUNK_BUFFSIZE 50*BUFSIZ // size of buffer used for large chunks of text files
 
 #define NSTUDENT 100
 #define NCONF 6
@@ -512,73 +519,161 @@ dbl_cmp(const void *a, const void *b)
 		return (0);
 }
 
+// chooses between parallel implimentation and base implimentation
 // #define PARALLEL
 #ifdef PARALLEL
-/*
-The high level concept of how to parallelize file reading
--------------------------------------------------------------------------------------------------------
-to parallelize this
 
-split file data into chunks to be read for each thread
+void merge_dataset(struct dataset* self, struct dataset* other) {
+	// Todo: merge contents of other into self
+}
 
-seperate datasets per each struct
+struct filechunk_read_payload {
+	int fd;
+	off_t filesize;
+	off_t offset;
+	int column;
+	const char* row_delim;
+	const char* filename;
+};
 
-The main thread will have a main dataset
-When a thread finishes (pthread_join), we merge the returned dataset into the main dataset.
------------------------------------------------------------------------------------------------
-We will repeat this above process until the entire file is traversed
+static void read_fileline_to_dataset(struct dataset *s, char* line, const char* delim, int column, const char *filename) {
+	char *t, *p;
+	double d;
+	size_t i = strlen(line);
+	if (line[i-1] == '\n')
+		line[i-1] = '\0';
+	
+	char* nextStr = line;
+	for (i = 1, t = strsep(&nextStr, delim);
+			t != NULL && *t != '#';
+			i++, t = strsep(&nextStr, delim)) {
+		if (i == column)
+			break;
+	}
+	
+	if (t == NULL || *t == '#')
+		return;
+	
+	d = strtod(t, &p);
+	
+	if (p != NULL && *p != '\0')
+		err(2, "Invalid data in %s\n", filename);
+	if (*line != '\0')
+		AddPoint(s, d);
+}
 
-How to read by chunks
-----------------------------------------------------------------------------------------------
+static struct dataset* fill_filechunk_data(struct filechunk_read_payload* payload) {
+	char *next_token, *current_token;
+	off_t bytes_left;
+	char buffer[FILECHUNK_BUFFSIZE];
+	ssize_t r;
+	struct dataset *s = NewSet();
 
-We will read by offset. (offset from start of file)
+	bytes_left = payload->filesize - payload->offset;
+	r = pread(payload->fd, (void*)buffer, (FILECHUNK_BUFFSIZE<bytes_left)?FILECHUNK_BUFFSIZE:bytes_left, payload->offset);
+	if(r == 0)
+		return s;
+	if(r == -1) {
+		err(1, "Read error in %s\n", payload->filename);
+	}
 
-Use pread to fill buffer.
+	current_token = strtok((char*)buffer, "\n");
 
-We only read the first line if the offset is 0, otherwise ignore the first line
+	if(payload->offset == 0)
+		read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename);
 
-Read the buffer by using string tokenization for '\n'
-If we are at the last line, use the corresponding offset to read the buffer and then read the first line.
+	current_token = strtok(NULL, "\n");
+	while((next_token = strtok(NULL, "\n")) != NULL) {
+		read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename);
+		current_token = next_token;
+	}
 
-l1
-l2
-l3
-l4
-l5
+	off_t lastline_offset = payload->offset + (off_t)(current_token - buffer);
+	bytes_left = payload->filesize - lastline_offset;
+	r = pread(payload->fd, (void*)buffer, (BUFSIZ < bytes_left)?BUFSIZ:bytes_left, payload->offset);
+	if(r == 0)
+		return s;
+	if(r == -1) {
+		err(1, "Read error in %s\n", payload->filename);
+	}
 
-read l1, if offset is 0, parse it to dataset
-read l2
-read l3, l3 is not NULL, add l2 to dataset
-read l4, l4 is not NULL, add l3 to dataset
-read l5, l5 is null so break loop
-use offset from l4 from start of buffer and add it to the original file offset, pread to the buffer from this combined value as the buffer and read next line.
-read buffer size for for pread is min(filesize - lastline offset, max buffersize)
-Use filesize to process it
-add that line to the dataset.
+	current_token = strtok((char*)buffer, "\n");
+	read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename);
 
--------------------------------------------------------------
-TLDR:
-Read file in seperate chunks, split each chunk for each thread, finish threads and merge data to main dataset.
-*/
+	return s;
+}
+
+void* fill_filechunk_data_thread(void* s) {
+	return (void*)fill_filechunk_data((struct filechunk_read_payload*)s);
+}
+
 static struct dataset *
 ReadSet(const char *n, int column, const char *delim)
 {
 	// get filehandle and filesize, and # of cpu cores
+	int fd, max_threads;
+	off_t  filesize, offset;
+	struct dataset *s;
+	pthread_t* threads;
+	struct filechunk_read_payload *payloads;
+	if (n == NULL || !strcmp(n, "-")) {
+		n =  "<stdin>";
+		fd = 0; // stdin
+		filesize = 0xffffffffffffffff; // max value of an unsigned 64 bit value
+	} else {
+		struct stat st;
+		stat(n, &st);
+		fd = open(n, O_RDONLY);
+		filesize = st.st_size;
+	}
+	if (fd < 0)
+		err(1, "Cannot open %s", n);
+	else if (filesize < 0) {
+		err(1, "Cannot open %s", n);
+	}
+	max_threads = get_nprocs_conf();
 	// init dataset
-	// BUFSIZE*50 will be how much each thread will read
-	// max # of threads  = # of cpu cores
-	// we will have a global read offset (initialize to 0)
-	// we will loop for the file
-	// We will read each thread incrementing the offset by BUFSIZE*50 and using that value for how much to read
-	// we join them, add to global dataset and repeat.
-	// if the offset >= filesize, we stop adding threads, we can use a threads_read value to indicate the limit when to stop joining
-	// offset >= filesize also is the condition to escape loop
-	// close file
-	// check dataset size
-	// sort
-	// return dataset
+	s = NewSet();
+	s->name = strdup(n);
+	offset = 0;
+	threads = (pthread_t*)malloc(sizeof(pthread_t)*max_threads);
+	payloads = (struct filechunk_read_payload*)malloc(sizeof(struct filechunk_read_payload)*max_threads);
+	while(offset < filesize) {
+		int threads_added;
+		for(threads_added = 0; threads_added < max_threads && offset < filesize; offset += FILECHUNK_BUFFSIZE, threads_added++) {
+			payloads[threads_added].fd = fd;
+			payloads[threads_added].filesize = filesize;
+			payloads[threads_added].offset = offset;
+			payloads[threads_added].column = column;
+			payloads[threads_added].row_delim = delim;
+			payloads[threads_added].filename = n;
+			pthread_create(threads + threads_added, NULL, fill_filechunk_data_thread, (void*)(payloads + threads_added));
+		}
+		for(int i = 0; i < threads_added; i++) {
+			struct dataset* thread_dataset;
+			pthread_join(threads[i], (void**)&thread_dataset);
+			merge_dataset(s, thread_dataset);
+			free(thread_dataset); // to prevent memory leak, try to use valgring
+		}
+	}
 
-	return NULL;
+	// free resources
+	close(fd);
+	free(threads);
+	free(payloads);
+
+	if (s->n < 3) {
+		fprintf(stderr,
+		    "Dataset %s must contain at least 3 data points\n", n);
+		exit (2);
+	}
+	
+	s->points = concatenateList(s);
+
+	an_qsort_doubles(s->points, s->n);
+	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
+
+	return s;
 }
 #else
 
