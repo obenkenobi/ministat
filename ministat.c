@@ -45,6 +45,8 @@ an_qsort_doubles(double* data, size_t data_length);
 // end setup an_qsort
 #endif
 
+int flag_vt = 0; //Verbose timing flag (set to be global)
+
 #define ITERATIONS 1 //This might need to change.
 static unsigned long long int timeStrtok = 0;
 static unsigned long long int timeStrtod = 0;
@@ -52,12 +54,23 @@ static unsigned long long int timeSort = 0;
 
 struct timespec tstart, tstop;
 
+void gettime_ifflagged(struct timespec *tp) {
+	if(__builtin_expect(flag_vt == 1, 0)) // this ensures for branch prediction that this condition at most times fails
+		clock_gettime(CLOCK_MONOTONIC, tp);
+}
+
 static unsigned long long elapsed_us(struct timespec *a, struct timespec *b)
 {
 	unsigned long long a_p = (a->tv_sec * 1000000ULL) + a->tv_nsec/1000;
 	unsigned long long b_p = (b->tv_sec * 1000000ULL) + b->tv_nsec/1000;
 	
 	return b_p - a_p;
+}
+
+static void add_elapsed_time(unsigned long long *dest, struct timespec *a, struct timespec *b) {
+	if(__builtin_expect(flag_vt == 1, 0)) {
+		*dest += elapsed_us(a, b) / ITERATIONS;
+	}
 }
 
 double const studentpct[] = { 80, 90, 95, 98, 99, 99.5 };
@@ -543,13 +556,20 @@ struct filechunk_read_payload {
 	const char* row_delim;
 	const char* filename;
 	struct dataset* output_dataset;
+	unsigned long long timestrtod;
+	unsigned long long timestrtok; 
 };
 
-static void read_fileline_to_dataset(struct dataset *s, char* line, const char* delim, int column, const char *filename) {
+static void 
+read_fileline_to_dataset(struct dataset *s, char* line, const char* delim, int column, const char *filename, 
+	unsigned long long *timestrtod_p, unsigned long long *timestrtok_p) {
+
+	struct timespec ttstart, ttstop;
 	char *t, *p;
 	double d;
 	size_t i = strlen(line);
 	
+	gettime_ifflagged(&ttstart); // start time
 	char* nextStr = line;
 	for (i = 1, t = strsep(&nextStr, delim);
 			t != NULL && *t != '#';
@@ -557,11 +577,16 @@ static void read_fileline_to_dataset(struct dataset *s, char* line, const char* 
 		if (i == column)
 			break;
 	}
+	gettime_ifflagged(&ttstop);
+	add_elapsed_time(timestrtok_p, &ttstart, &ttstop);  //Store amount of time spent on strtod in seconds
 	
 	if (t == NULL || *t == '#')
 		return;
 	
+	gettime_ifflagged(&ttstart); // start time
 	d = strtod(t, &p);
+	gettime_ifflagged(&ttstop);
+	add_elapsed_time(timestrtod_p, &ttstart, &ttstop);  //Store amount of time spent on strtod in seconds
 	
 	if (p != NULL && *p != '\0')
 		err(2, "Invalid data in %s\n", filename);
@@ -569,7 +594,8 @@ static void read_fileline_to_dataset(struct dataset *s, char* line, const char* 
 		AddPoint(s, d);
 }
 
-static struct dataset* fill_filechunk_data(struct filechunk_read_payload* payload) {
+static struct dataset* 
+fill_filechunk_data(struct filechunk_read_payload* payload) {
 	char *next_token, *current_token, *nextStr;
 	off_t bytes_left, bytes_to_read;
 	char buffer[FILECHUNK_BUFFSIZE + 1];
@@ -589,12 +615,14 @@ static struct dataset* fill_filechunk_data(struct filechunk_read_payload* payloa
 	nextStr = (char*)buffer;
 	current_token = strsep(&nextStr, "\n");
 
-	if(payload->offset == 0)
-		read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename);
+	if(__builtin_expect(payload->offset == 0, 0)) // most of the time this condition fails so branch always predict failure
+		read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename, 
+			&payload->timestrtod, &payload->timestrtok);
 
 	current_token = strsep(&nextStr, "\n");
 	while((next_token = strsep(&nextStr, "\n")) != NULL) {
-		read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename);
+		read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename, 
+			&payload->timestrtod, &payload->timestrtok);
 		current_token = next_token;
 	}
 
@@ -614,12 +642,14 @@ static struct dataset* fill_filechunk_data(struct filechunk_read_payload* payloa
 	}
 
 	current_token = strsep(&nextStr, "\n");
-	read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename);
+	read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename, 
+		&payload->timestrtod, &payload->timestrtok);
 
 	return s;
 }
 
-void* fill_filechunk_data_thread(void* s) {
+void* 
+fill_filechunk_data_thread(void* s) {
 	struct filechunk_read_payload* payload = (struct filechunk_read_payload*)s;
 	payload->output_dataset = fill_filechunk_data(payload);
 	return NULL;
@@ -662,6 +692,10 @@ ReadSet(const char *n, int column, const char *delim)
 		payloads[i].column = column;
 		payloads[i].row_delim = delim;
 		payloads[i].filename = n;
+		if(__builtin_expect(flag_vt == 1, 0)) {
+			payloads[i].timestrtod = 0;
+			payloads[i].timestrtok = 0;	
+		}
 	}
 	while(offset < filesize) {
 		int threads_added;
@@ -673,6 +707,12 @@ ReadSet(const char *n, int column, const char *delim)
 			pthread_join(threads[i], NULL);
 			merge_dataset(s, payloads[i].output_dataset);
 			free(payloads[i].output_dataset); // to prevent memory leak
+		}
+	}
+	if(__builtin_expect(flag_vt == 1, 0)) {
+		for(int i=0; i < max_threads; i++) {
+			timeStrtod += payloads[i].timestrtod;
+			timeStrtok += payloads[i].timestrtok;
 		}
 	}
 
@@ -688,11 +728,17 @@ ReadSet(const char *n, int column, const char *delim)
 	}
 	
 	s->points = concatenateList(s);
+
+	gettime_ifflagged(&tstart); // start time
+
 	#ifdef USE_AN_QSORT
 	an_qsort_doubles(s->points, s->n);
 	# else 
 	qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
 	#endif
+
+	gettime_ifflagged(&tstop);
+	add_elapsed_time(&timeSort, &tstart, &tstop);
 
 	return s;
 }
@@ -736,7 +782,7 @@ main(int argc, char **argv)
 	int flag_n = 0;
 	int flag_q = 0;
 	int termwidth = 74;
-	int flag_vt = 0; //Verbose timing flag
+	// int flag_vt = 0; //Verbose timing flag
 	
 	unsigned long long int timeReadSet = 0;
 	unsigned long long int timePlot = 0;
@@ -806,7 +852,7 @@ main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start
+	gettime_ifflagged(&tstart); //Timing start
 	
 	if (argc == 0) {
 		ds[0] = ReadSet("-", column, delim);
@@ -819,10 +865,10 @@ main(int argc, char **argv)
 			ds[i] = ReadSet(argv[i], column, delim);
 	}
 	
-	clock_gettime(CLOCK_MONOTONIC, &tstop);
-	timeReadSet = elapsed_us(&tstart, &tstop) / ITERATIONS;
+	gettime_ifflagged(&tstop);
+	add_elapsed_time(&timeReadSet, &tstart, &tstop);
 	
-	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start
+	gettime_ifflagged(&tstart); //Timing start
 
 	for (i = 0; i < nds; i++) 
 		printf("%c %s\n", symbol[i+1], ds[i]->name);
@@ -836,10 +882,10 @@ main(int argc, char **argv)
 		DumpPlot();
 	}
 	
-	clock_gettime(CLOCK_MONOTONIC, &tstop);
-	timePlot = elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on plot in seconds
+	gettime_ifflagged(&tstop);
+	add_elapsed_time(&timePlot, &tstart, &tstop); //Store amount of time spent on plot in seconds
 	
-	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start
+	gettime_ifflagged(&tstart); //Timing start
 	
 	VitalsHead();
 	Vitals(ds[0], 1);
@@ -849,12 +895,12 @@ main(int argc, char **argv)
 			Relative(ds[i], ds[0], ci);
 	}
 	
-	clock_gettime(CLOCK_MONOTONIC, &tstop);
-	timeVitals = elapsed_us(&tstart, &tstop) / ITERATIONS;
+	gettime_ifflagged(&tstop);
+	add_elapsed_time(&timeVitals, &tstart, &tstop);
 	
 	unsigned long long int timeTotal = timeReadSet + timePlot + timeVitals + timeSort + timeStrtod + timeStrtok;
 	
-	if(flag_vt == 1)
+	if(__builtin_expect(flag_vt == 1, 0))
 		printf("\nTIMING DATA\n%llu microsecs reading set.\n%llu microsecs plotting.\n%llu microsecs reading and printing vitals.\n%llu microsecs sorting.\n%llu microsecs strtod.\n%llu microsecs strtok.\n%llu microsecs total.\n", timeReadSet, timePlot, timeVitals, timeSort, timeStrtod, timeStrtok, timeTotal);
 	
 	exit(0);
