@@ -644,7 +644,7 @@ ReadSet(const char *n, int column, const char *delim)
 	else if (filesize < 0) {
 		err(1, "Cannot open %s", n);
 	}
-	max_threads = get_nprocs_conf();
+	max_threads = get_nprocs();
 	// init dataset
 	s = NewSet();
 	s->name = strdup(n);
