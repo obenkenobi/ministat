@@ -175,13 +175,15 @@ struct dataset {
 	struct linkedListNode* tail;
 	
 	double *points;
-	unsigned lpoints;
+	// unsigned lpoints;
 	double sy, syy;
 	unsigned n;
 };
 
+#define LPOINTS 100000 // node points capacity
+
 struct linkedListNode {
-	double *points;
+	double points[LPOINTS];
 	//double sy, syy;
 	unsigned n;
 	struct linkedListNode* next;
@@ -194,13 +196,14 @@ static double * concatenateList(struct dataset *ds) //Turn the linked list into 
 	struct linkedListNode * cursor;
 	for(cursor = ds->head; cursor != NULL; cursor = cursor->next)
 	{
-		for(int i = 0; i < cursor->n; i++)
-		{
-			points[points_i] = cursor->points[i];
-			points_i++;
-		}
+		// for(int i = 0; i < cursor->n; i++)
+		// {
+		// 	points[points_i] = cursor->points[i];
+		// 	points_i++;
+		// }
 		
-		//memcpy(points, cursor->points, cursor->n*sizeof(cursor->n));
+		memcpy(points + points_i, cursor->points, cursor->n*sizeof(*cursor->points));
+		points_i += cursor->n;
 	}
 	
 	return points;
@@ -214,8 +217,8 @@ NewSet(void)
 	
 	ds = calloc(1, sizeof *ds);
 	ds->head = calloc(1, sizeof *head);
-	ds->lpoints = 100000;
-	ds->head->points = calloc(ds->lpoints, sizeof *ds->head->points);
+	// ds->lpoints = 100000;
+	// ds->head->points = calloc(ds->lpoints, sizeof *ds->head->points);
 	ds->head->next = NULL;
 	ds->tail = ds->head;
 	return(ds);
@@ -226,12 +229,12 @@ AddPoint(struct dataset *ds, double a)
 {
 	// double *dp;
 
-	if (ds->tail->n >= ds->lpoints) {
+	if (ds->tail->n >= LPOINTS) {
 		//dp = ds->points;
 		//ds->lpoints *= 4; !!!~~~		
 		//ds->points = realloc(ds->points, sizeof *dp * ds->n); !!!~~~
 		struct linkedListNode* newTail = (struct linkedListNode*) malloc(sizeof(struct linkedListNode));
-		newTail->points = calloc(ds->lpoints, sizeof *newTail->points);
+		// newTail->points = calloc(ds->lpoints, sizeof *newTail->points);
 		newTail->n = 0; // ensure n is by default 0
 		ds->tail->next = newTail;
 		ds->tail = newTail;
