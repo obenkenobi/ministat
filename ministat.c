@@ -22,6 +22,19 @@
 #define NSTUDENT 100
 #define NCONF 6
 
+// setup an_qsort
+static int
+dbl_cmp(const void *a, const void *b);
+
+#define AN_QSORT_SUFFIX doubles
+#define AN_QSORT_TYPE double
+#define AN_QSORT_CMP dbl_cmp
+
+#include "an_qsort.inc"
+static void 
+an_qsort_doubles(double* data, size_t data_length);
+// end setup an_qsort
+
 #define ITERATIONS 1 //This might need to change.
 static unsigned long long int timeStrtok = 0;
 static unsigned long long int timeStrtod = 0;
@@ -201,7 +214,7 @@ NewSet(void)
 static void
 AddPoint(struct dataset *ds, double a)
 {
-	double *dp;
+	// double *dp;
 
 	if (ds->tail->n >= ds->lpoints) {
 		//dp = ds->points;
@@ -499,6 +512,7 @@ dbl_cmp(const void *a, const void *b)
 		return (0);
 }
 
+#ifdef FAKE
 /*
 The high level concept of how to parallelize file reading
 -------------------------------------------------------------------------------------------------------
@@ -565,6 +579,7 @@ ReadSet2(const char *n, int column, const char *delim)
 
 	return NULL;
 }
+#endif
 
 static struct dataset *
 ReadSet(const char *n, int column, const char *delim)
@@ -598,9 +613,10 @@ ReadSet(const char *n, int column, const char *delim)
 			buf[i-1] = '\0';
 		
 		clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start strtok
-		for (i = 1, t = strtok(buf, delim);
+		char* nextStr = buf;
+		for (i = 1, t = strsep(&nextStr, delim);
 		     t != NULL && *t != '#';
-		     i++, t = strtok(NULL, delim)) {
+		     i++, t = strsep(&nextStr, delim)) {
 			if (i == column)
 				break;
 		}
@@ -630,7 +646,8 @@ ReadSet(const char *n, int column, const char *delim)
 	s->points = concatenateList(s);
 	
 	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start qsort
-	qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
+	an_qsort_doubles(s->points, s->n);
+	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
 	clock_gettime(CLOCK_MONOTONIC, &tstop);
 	timeSort += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on qsort in seconds
 	
