@@ -29,6 +29,7 @@
 #define NSTUDENT 100
 #define NCONF 6
 
+#ifdef USE_AN_QSORT // an_qsort while faster ended up sacrificing much needed accuracy when calculating medians
 // setup an_qsort
 static int
 dbl_cmp(const void *a, const void *b);
@@ -41,6 +42,7 @@ dbl_cmp(const void *a, const void *b);
 static void 
 an_qsort_doubles(double* data, size_t data_length);
 // end setup an_qsort
+#endif
 
 #define ITERATIONS 1 //This might need to change.
 static unsigned long long int timeStrtok = 0;
@@ -238,6 +240,15 @@ AddPoint(struct dataset *ds, double a)
 	ds->sy += a;
 	ds->syy += a * a;
 	//ds->points = concatenateList(ds);
+}
+
+// merge contents of dateset other into the main dataset
+static void merge_dataset(struct dataset* main, struct dataset* other) {
+	main->tail->next = other->head;
+	main->tail = other->tail;
+	main->n += other->n;
+	main->sy += other->sy;
+	main->syy += other->syy;
 }
 
 static double
@@ -520,19 +531,6 @@ dbl_cmp(const void *a, const void *b)
 		return (0);
 }
 
-// chooses between parallel implimentation and base implimentation
-#define PARALLEL
-#ifdef PARALLEL
-
-// merge contents of dateset other into the main dataset
-static void merge_dataset(struct dataset* main, struct dataset* other) {
-	main->tail->next = other->head;
-	main->tail = other->tail;
-	main->n += other->n;
-	main->sy += other->sy;
-	main->syy += other->syy;
-}
-
 struct filechunk_read_payload {
 	int fd;
 	off_t filesize;
@@ -686,87 +684,14 @@ ReadSet(const char *n, int column, const char *delim)
 	}
 	
 	s->points = concatenateList(s);
-
+	#ifdef USE_AN_QSORT
 	an_qsort_doubles(s->points, s->n);
-	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
+	# else 
+	qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
+	#endif
 
 	return s;
 }
-#else
-
-static struct dataset *
-ReadSet(const char *n, int column, const char *delim)
-{
-	FILE *f;
-	char buf[BUFSIZ], *p, *t;
-	struct dataset *s;
-	double d;
-	int line;
-	int i;
-
-	if (n == NULL) {
-		f = stdin;
-		n = "<stdin>";
-	} else if (!strcmp(n, "-")) {
-		f = stdin;
-		n = "<stdin>";
-	} else {
-		f = fopen(n, "r");
-	}
-	if (f == NULL)
-		err(1, "Cannot open %s", n);
-	s = NewSet();
-	s->name = strdup(n);
-	line = 0;
-	while (fgets(buf, sizeof buf, f) != NULL) {
-		line++;
-
-		i = strlen(buf);
-		if (buf[i-1] == '\n')
-			buf[i-1] = '\0';
-		
-		clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start strtok
-		char* nextStr = buf;
-		for (i = 1, t = strsep(&nextStr, delim);
-		     t != NULL && *t != '#';
-		     i++, t = strsep(&nextStr, delim)) {
-			if (i == column)
-				break;
-		}
-		clock_gettime(CLOCK_MONOTONIC, &tstop);
-		timeStrtok += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on strtok in seconds
-		
-		if (t == NULL || *t == '#')
-			continue;
-		
-		clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start strtod
-		d = strtod(t, &p);
-		clock_gettime(CLOCK_MONOTONIC, &tstop);
-		timeStrtod += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on strtod in seconds
-		
-		if (p != NULL && *p != '\0')
-			err(2, "Invalid data on line %d in %s\n", line, n);
-		if (*buf != '\0')
-			AddPoint(s, d);
-	}
-	fclose(f);
-	if (s->n < 3) {
-		fprintf(stderr,
-		    "Dataset %s must contain at least 3 data points\n", n);
-		exit (2);
-	}
-	
-	s->points = concatenateList(s);
-	
-	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start qsort
-	an_qsort_doubles(s->points, s->n);
-	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
-	clock_gettime(CLOCK_MONOTONIC, &tstop);
-	timeSort += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on qsort in seconds
-	
-	return (s);
-}
-#endif
 
 static void
 usage(char const *whine)
