@@ -29,6 +29,7 @@
 #define NSTUDENT 100
 #define NCONF 6
 
+// #define USE_AN_QSORT
 #ifdef USE_AN_QSORT // an_qsort while faster ended up sacrificing much needed accuracy when calculating medians
 // setup an_qsort
 static int
