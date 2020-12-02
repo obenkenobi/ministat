@@ -653,7 +653,7 @@ ReadSet(const char *n, int column, const char *delim)
 			struct dataset* thread_dataset;
 			pthread_join(threads[i], (void**)&thread_dataset);
 			merge_dataset(s, thread_dataset);
-			free(thread_dataset); // to prevent memory leak, try to use valgring
+			free(thread_dataset); // to prevent memory leak
 		}
 	}
 
