@@ -512,7 +512,8 @@ dbl_cmp(const void *a, const void *b)
 		return (0);
 }
 
-#ifdef FAKE
+// #define PARALLEL
+#ifdef PARALLEL
 /*
 The high level concept of how to parallelize file reading
 -------------------------------------------------------------------------------------------------------
@@ -560,7 +561,7 @@ TLDR:
 Read file in seperate chunks, split each chunk for each thread, finish threads and merge data to main dataset.
 */
 static struct dataset *
-ReadSet2(const char *n, int column, const char *delim)
+ReadSet(const char *n, int column, const char *delim)
 {
 	// get filehandle and filesize, and # of cpu cores
 	// init dataset
@@ -579,7 +580,7 @@ ReadSet2(const char *n, int column, const char *delim)
 
 	return NULL;
 }
-#endif
+#else
 
 static struct dataset *
 ReadSet(const char *n, int column, const char *delim)
@@ -653,6 +654,7 @@ ReadSet(const char *n, int column, const char *delim)
 	
 	return (s);
 }
+#endif
 
 static void
 usage(char const *whine)
