@@ -15,24 +15,28 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h> //NEW HEADER
 
 #include "queue.h"
 
-// setup an_qsort
-static int
-dbl_cmp(const void *a, const void *b);
-
-#define AN_QSORT_SUFFIX doubles
-#define AN_QSORT_TYPE double
-#define AN_QSORT_CMP dbl_cmp
-
-#include "an_qsort.inc"
-static void 
-an_qsort_doubles(double* data, size_t data_length);
-// end setup an_qsort
-
 #define NSTUDENT 100
 #define NCONF 6
+
+#define ITERATIONS 1 //This might need to change.
+static unsigned long long int timeStrtok = 0;
+static unsigned long long int timeStrtod = 0;
+static unsigned long long int timeSort = 0;
+
+struct timespec tstart, tstop;
+
+static unsigned long long elapsed_us(struct timespec *a, struct timespec *b)
+{
+	unsigned long long a_p = (a->tv_sec * 1000000ULL) + a->tv_nsec/1000;
+	unsigned long long b_p = (b->tv_sec * 1000000ULL) + b->tv_nsec/1000;
+	
+	return b_p - a_p;
+}
+
 double const studentpct[] = { 80, 90, 95, 98, 99, 99.5 };
 double student [NSTUDENT + 1][NCONF] = {
 /* inf */	{	1.282,	1.645,	1.960,	2.326,	2.576,	3.090  },
@@ -143,20 +147,54 @@ static char symbol[MAX_DS] = { ' ', 'x', '+', '*', '%', '#', '@', 'O' };
 
 struct dataset {
 	char *name;
-	double	*points;
+	
+	struct linkedListNode* head;
+	struct linkedListNode* tail;
+	
+	double *points;
 	unsigned lpoints;
 	double sy, syy;
 	unsigned n;
 };
 
+struct linkedListNode {
+	double *points;
+	//double sy, syy;
+	unsigned n;
+	struct linkedListNode* next;
+};
+
+static double * concatenateList(struct dataset *ds) //Turn the linked list into one big array to store in points.
+{
+	double * points = malloc(ds->n * sizeof(ds->points));
+	unsigned int points_i = 0;
+	struct linkedListNode * cursor;
+	for(cursor = ds->head; cursor != NULL; cursor = cursor->next)
+	{
+		for(int i = 0; i < cursor->n; i++)
+		{
+			points[points_i] = cursor->points[i];
+			points_i++;
+		}
+		
+		//memcpy(points, cursor->points, cursor->n*sizeof(cursor->n));
+	}
+	
+	return points;
+}
+
 static struct dataset *
 NewSet(void)
 {
 	struct dataset *ds;
-
+	struct linkedListNode *head;
+	
 	ds = calloc(1, sizeof *ds);
+	ds->head = calloc(1, sizeof *head);
 	ds->lpoints = 100000;
-	ds->points = calloc(sizeof *ds->points, ds->lpoints);
+	ds->head->points = calloc(ds->lpoints, sizeof *ds->head->points);
+	ds->head->next = NULL;
+	ds->tail = ds->head;
 	return(ds);
 }
 
@@ -165,16 +203,20 @@ AddPoint(struct dataset *ds, double a)
 {
 	double *dp;
 
-	if (ds->n >= ds->lpoints) {
-		dp = ds->points;
-		ds->lpoints *= 4;
-		ds->points = calloc(sizeof *ds->points, ds->lpoints);
-		memcpy(ds->points, dp, sizeof *dp * ds->n);
-		free(dp);
+	if (ds->tail->n >= ds->lpoints) {
+		//dp = ds->points;
+		//ds->lpoints *= 4; !!!~~~		
+		//ds->points = realloc(ds->points, sizeof *dp * ds->n); !!!~~~
+		struct linkedListNode* newTail = (struct linkedListNode*) malloc(sizeof(struct linkedListNode));
+		newTail->points = calloc(ds->lpoints, sizeof *newTail->points);
+		ds->tail->next = newTail;
+		ds->tail = newTail;
 	}
-	ds->points[ds->n++] = a;
+	ds->tail->points[ds->tail->n++] = a;
+	ds->n++;
 	ds->sy += a;
 	ds->syy += a * a;
+	//ds->points = concatenateList(ds);
 }
 
 static double
@@ -487,17 +529,25 @@ ReadSet(const char *n, int column, const char *delim)
 		i = strlen(buf);
 		if (buf[i-1] == '\n')
 			buf[i-1] = '\0';
-		char* nextStr = buf;
-		for (i = 1, t = strsep(&nextStr, delim);
+		
+		clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start strtok
+		for (i = 1, t = strtok(buf, delim);
 		     t != NULL && *t != '#';
-		     i++, t = strsep(&nextStr, delim)) {
+		     i++, t = strtok(NULL, delim)) {
 			if (i == column)
 				break;
 		}
+		clock_gettime(CLOCK_MONOTONIC, &tstop);
+		timeStrtok += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on strtok in seconds
+		
 		if (t == NULL || *t == '#')
 			continue;
-
+		
+		clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start strtod
 		d = strtod(t, &p);
+		clock_gettime(CLOCK_MONOTONIC, &tstop);
+		timeStrtod += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on strtod in seconds
+		
 		if (p != NULL && *p != '\0')
 			err(2, "Invalid data on line %d in %s\n", line, n);
 		if (*buf != '\0')
@@ -509,8 +559,14 @@ ReadSet(const char *n, int column, const char *delim)
 		    "Dataset %s must contain at least 3 data points\n", n);
 		exit (2);
 	}
-	an_qsort_doubles(s->points, s->n);
-	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
+	
+	s->points = concatenateList(s);
+	
+	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start qsort
+	qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
+	clock_gettime(CLOCK_MONOTONIC, &tstop);
+	timeSort += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on qsort in seconds
+	
 	return (s);
 }
 
@@ -521,7 +577,7 @@ usage(char const *whine)
 
 	fprintf(stderr, "%s\n", whine);
 	fprintf(stderr,
-	    "Usage: ministat [-C column] [-c confidence] [-d delimiter(s)] [-ns] [-w width] [file [file ...]]\n");
+	    "Usage: ministat [-C column] [-c confidence] [-d delimiter(s)] [-nsv] [-w width] [file [file ...]]\n");
 	fprintf(stderr, "\tconfidence = {");
 	for (i = 0; i < NCONF; i++) {
 		fprintf(stderr, "%s%g%%",
@@ -534,6 +590,7 @@ usage(char const *whine)
 	fprintf(stderr, "\t-n : print summary statistics only, no graph/test\n");
 	fprintf(stderr, "\t-q : print summary statistics and test only, no graph\n");
 	fprintf(stderr, "\t-s : print avg/median/stddev bars on separate lines\n");
+	fprintf(stderr, "\t-w : print verbose timing data\n");
 	fprintf(stderr, "\t-w : width of graph/test output (default 74 or terminal width)\n");
 	exit (2);
 }
@@ -552,6 +609,12 @@ main(int argc, char **argv)
 	int flag_n = 0;
 	int flag_q = 0;
 	int termwidth = 74;
+	int flag_vt = 0; //Verbose timing flag
+	
+	unsigned long long int timeReadSet = 0;
+	unsigned long long int timePlot = 0;
+	unsigned long long int timeVitals = 0;
+	
 
 	if (isatty(STDOUT_FILENO)) {
 		struct winsize wsz;
@@ -564,7 +627,7 @@ main(int argc, char **argv)
 	}
 
 	ci = -1;
-	while ((c = getopt(argc, argv, "C:c:d:snqw:")) != -1)
+	while ((c = getopt(argc, argv, "C:c:d:snqvw:")) != -1)
 		switch (c) {
 		case 'C':
 			column = strtol(optarg, &p, 10);
@@ -597,6 +660,9 @@ main(int argc, char **argv)
 		case 's':
 			flag_s = 1;
 			break;
+		case 'v': // **NEW CASE**
+			flag_vt = 1;
+			break;
 		case 'w':
 			termwidth = strtol(optarg, &p, 10);
 			if (p != NULL && *p != '\0')
@@ -613,6 +679,8 @@ main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
+	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start
+	
 	if (argc == 0) {
 		ds[0] = ReadSet("-", column, delim);
 		nds = 1;
@@ -623,6 +691,11 @@ main(int argc, char **argv)
 		for (i = 0; i < nds; i++)
 			ds[i] = ReadSet(argv[i], column, delim);
 	}
+	
+	clock_gettime(CLOCK_MONOTONIC, &tstop);
+	timeReadSet = elapsed_us(&tstart, &tstop) / ITERATIONS;
+	
+	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start
 
 	for (i = 0; i < nds; i++) 
 		printf("%c %s\n", symbol[i+1], ds[i]->name);
@@ -635,6 +708,12 @@ main(int argc, char **argv)
 			PlotSet(ds[i], i + 1);
 		DumpPlot();
 	}
+	
+	clock_gettime(CLOCK_MONOTONIC, &tstop);
+	timePlot = elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on plot in seconds
+	
+	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start
+	
 	VitalsHead();
 	Vitals(ds[0], 1);
 	for (i = 1; i < nds; i++) {
@@ -642,5 +721,14 @@ main(int argc, char **argv)
 		if (!flag_n)
 			Relative(ds[i], ds[0], ci);
 	}
+	
+	clock_gettime(CLOCK_MONOTONIC, &tstop);
+	timeVitals = elapsed_us(&tstart, &tstop) / ITERATIONS;
+	
+	unsigned long long int timeTotal = timeReadSet + timePlot + timeVitals + timeSort + timeStrtod + timeStrtok;
+	
+	if(flag_vt == 1)
+		printf("\nTIMING DATA\n%llu microsecs reading set.\n%llu microsecs plotting.\n%llu microsecs reading and printing vitals.\n%llu microsecs sorting.\n%llu microsecs strtod.\n%llu microsecs strtok.\n%llu microsecs total.\n", timeReadSet, timePlot, timeVitals, timeSort, timeStrtod, timeStrtok, timeTotal);
+	
 	exit(0);
 }
