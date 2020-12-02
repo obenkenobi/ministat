@@ -537,6 +537,8 @@ read l3, l3 is not NULL, add l2 to dataset
 read l4, l4 is not NULL, add l3 to dataset
 read l5, l5 is null so break loop
 use offset from l4 from start of buffer and add it to the original file offset, pread to the buffer from this combined value as the buffer and read next line.
+read buffer size for for pread is min(filesize - lastline offset, max buffersize)
+Use filesize to process it
 add that line to the dataset.
 
 -------------------------------------------------------------
