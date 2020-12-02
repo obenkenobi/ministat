@@ -186,7 +186,7 @@ struct linkedListNode {
 
 static double * concatenateList(struct dataset *ds) //Turn the linked list into one big array to store in points.
 {
-	double * points = malloc(ds->n * sizeof(ds->points));
+	double * points = malloc(ds->n * sizeof(*ds->points));
 	unsigned int points_i = 0;
 	struct linkedListNode * cursor;
 	for(cursor = ds->head; cursor != NULL; cursor = cursor->next)
@@ -229,6 +229,7 @@ AddPoint(struct dataset *ds, double a)
 		//ds->points = realloc(ds->points, sizeof *dp * ds->n); !!!~~~
 		struct linkedListNode* newTail = (struct linkedListNode*) malloc(sizeof(struct linkedListNode));
 		newTail->points = calloc(ds->lpoints, sizeof *newTail->points);
+		newTail->n = 0; // ensure n is by default 0
 		ds->tail->next = newTail;
 		ds->tail = newTail;
 	}
@@ -520,11 +521,16 @@ dbl_cmp(const void *a, const void *b)
 }
 
 // chooses between parallel implimentation and base implimentation
-// #define PARALLEL
+#define PARALLEL
 #ifdef PARALLEL
 
-void merge_dataset(struct dataset* self, struct dataset* other) {
-	// Todo: merge contents of other into self
+// merge contents of dateset other into the main dataset
+static void merge_dataset(struct dataset* main, struct dataset* other) {
+	main->tail->next = other->head;
+	main->tail = other->tail;
+	main->n += other->n;
+	main->sy += other->sy;
+	main->syy += other->syy;
 }
 
 struct filechunk_read_payload {
@@ -540,8 +546,6 @@ static void read_fileline_to_dataset(struct dataset *s, char* line, const char* 
 	char *t, *p;
 	double d;
 	size_t i = strlen(line);
-	if (line[i-1] == '\n')
-		line[i-1] = '\0';
 	
 	char* nextStr = line;
 	for (i = 1, t = strsep(&nextStr, delim);
@@ -563,41 +567,50 @@ static void read_fileline_to_dataset(struct dataset *s, char* line, const char* 
 }
 
 static struct dataset* fill_filechunk_data(struct filechunk_read_payload* payload) {
-	char *next_token, *current_token;
-	off_t bytes_left;
-	char buffer[FILECHUNK_BUFFSIZE];
+	char *next_token, *current_token, *nextStr;
+	off_t bytes_left, bytes_to_read;
+	char buffer[FILECHUNK_BUFFSIZE + 1];
 	ssize_t r;
 	struct dataset *s = NewSet();
 
 	bytes_left = payload->filesize - payload->offset;
-	r = pread(payload->fd, (void*)buffer, (FILECHUNK_BUFFSIZE<bytes_left)?FILECHUNK_BUFFSIZE:bytes_left, payload->offset);
+	bytes_to_read = (FILECHUNK_BUFFSIZE<bytes_left)?FILECHUNK_BUFFSIZE:bytes_left;
+	r = pread(payload->fd, (void*)buffer, bytes_to_read, payload->offset);
+	buffer[bytes_to_read] = '\0';
 	if(r == 0)
 		return s;
 	if(r == -1) {
 		err(1, "Read error in %s\n", payload->filename);
 	}
 
-	current_token = strtok((char*)buffer, "\n");
+	nextStr = (char*)buffer;
+	current_token = strsep(&nextStr, "\n");
 
 	if(payload->offset == 0)
 		read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename);
 
-	current_token = strtok(NULL, "\n");
-	while((next_token = strtok(NULL, "\n")) != NULL) {
+	current_token = strsep(&nextStr, "\n");
+	while((next_token = strsep(&nextStr, "\n")) != NULL) {
 		read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename);
 		current_token = next_token;
 	}
 
 	off_t lastline_offset = payload->offset + (off_t)(current_token - buffer);
 	bytes_left = payload->filesize - lastline_offset;
-	r = pread(payload->fd, (void*)buffer, (BUFSIZ < bytes_left)?BUFSIZ:bytes_left, payload->offset);
+	if (bytes_left <= 0) {
+		return s;
+	}
+	bytes_to_read = (BUFSIZ < bytes_left)?BUFSIZ:bytes_left;
+	nextStr = (char*)buffer;
+	r = pread(payload->fd, (void*)buffer, bytes_to_read, lastline_offset);
+	buffer[bytes_to_read] = '\0';
 	if(r == 0)
 		return s;
 	if(r == -1) {
 		err(1, "Read error in %s\n", payload->filename);
 	}
 
-	current_token = strtok((char*)buffer, "\n");
+	current_token = strsep(&nextStr, "\n");
 	read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename);
 
 	return s;
