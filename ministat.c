@@ -22,6 +22,19 @@
 #define NSTUDENT 100
 #define NCONF 6
 
+// setup an_qsort
+static int
+dbl_cmp(const void *a, const void *b);
+
+#define AN_QSORT_SUFFIX doubles
+#define AN_QSORT_TYPE double
+#define AN_QSORT_CMP dbl_cmp
+
+#include "an_qsort.inc"
+static void 
+an_qsort_doubles(double* data, size_t data_length);
+// end setup an_qsort
+
 #define ITERATIONS 1 //This might need to change.
 static unsigned long long int timeStrtok = 0;
 static unsigned long long int timeStrtod = 0;
@@ -201,7 +214,7 @@ NewSet(void)
 static void
 AddPoint(struct dataset *ds, double a)
 {
-	double *dp;
+	// double *dp;
 
 	if (ds->tail->n >= ds->lpoints) {
 		//dp = ds->points;
@@ -499,6 +512,76 @@ dbl_cmp(const void *a, const void *b)
 		return (0);
 }
 
+// #define PARALLEL
+#ifdef PARALLEL
+/*
+The high level concept of how to parallelize file reading
+-------------------------------------------------------------------------------------------------------
+to parallelize this
+
+split file data into chunks to be read for each thread
+
+seperate datasets per each struct
+
+The main thread will have a main dataset
+When a thread finishes (pthread_join), we merge the returned dataset into the main dataset.
+-----------------------------------------------------------------------------------------------
+We will repeat this above process until the entire file is traversed
+
+How to read by chunks
+----------------------------------------------------------------------------------------------
+
+We will read by offset. (offset from start of file)
+
+Use pread to fill buffer.
+
+We only read the first line if the offset is 0, otherwise ignore the first line
+
+Read the buffer by using string tokenization for '\n'
+If we are at the last line, use the corresponding offset to read the buffer and then read the first line.
+
+l1
+l2
+l3
+l4
+l5
+
+read l1, if offset is 0, parse it to dataset
+read l2
+read l3, l3 is not NULL, add l2 to dataset
+read l4, l4 is not NULL, add l3 to dataset
+read l5, l5 is null so break loop
+use offset from l4 from start of buffer and add it to the original file offset, pread to the buffer from this combined value as the buffer and read next line.
+read buffer size for for pread is min(filesize - lastline offset, max buffersize)
+Use filesize to process it
+add that line to the dataset.
+
+-------------------------------------------------------------
+TLDR:
+Read file in seperate chunks, split each chunk for each thread, finish threads and merge data to main dataset.
+*/
+static struct dataset *
+ReadSet(const char *n, int column, const char *delim)
+{
+	// get filehandle and filesize, and # of cpu cores
+	// init dataset
+	// BUFSIZE*50 will be how much each thread will read
+	// max # of threads  = # of cpu cores
+	// we will have a global read offset (initialize to 0)
+	// we will loop for the file
+	// We will read each thread incrementing the offset by BUFSIZE*50 and using that value for how much to read
+	// we join them, add to global dataset and repeat.
+	// if the offset >= filesize, we stop adding threads, we can use a threads_read value to indicate the limit when to stop joining
+	// offset >= filesize also is the condition to escape loop
+	// close file
+	// check dataset size
+	// sort
+	// return dataset
+
+	return NULL;
+}
+#else
+
 static struct dataset *
 ReadSet(const char *n, int column, const char *delim)
 {
@@ -531,9 +614,10 @@ ReadSet(const char *n, int column, const char *delim)
 			buf[i-1] = '\0';
 		
 		clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start strtok
-		for (i = 1, t = strtok(buf, delim);
+		char* nextStr = buf;
+		for (i = 1, t = strsep(&nextStr, delim);
 		     t != NULL && *t != '#';
-		     i++, t = strtok(NULL, delim)) {
+		     i++, t = strsep(&nextStr, delim)) {
 			if (i == column)
 				break;
 		}
@@ -563,12 +647,14 @@ ReadSet(const char *n, int column, const char *delim)
 	s->points = concatenateList(s);
 	
 	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start qsort
-	qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
+	an_qsort_doubles(s->points, s->n);
+	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
 	clock_gettime(CLOCK_MONOTONIC, &tstop);
 	timeSort += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on qsort in seconds
 	
 	return (s);
 }
+#endif
 
 static void
 usage(char const *whine)
