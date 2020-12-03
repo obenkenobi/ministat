@@ -6,7 +6,7 @@ PKGS =
 
 CFLAGS  += -g -Wall -Werror -pthread -O2
 CPPFLAGS+= -I. -D_GNU_SOURCE
-LDFLAGS += -lm
+LDFLAGS += -lm -lpthread
 
 PREFIX ?= /usr
 
