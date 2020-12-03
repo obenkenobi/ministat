@@ -743,6 +743,79 @@ ReadSet(const char *n, int column, const char *delim)
 	return s;
 }
 
+// static struct dataset *
+// ReadSet(const char *n, int column, const char *delim)
+// {
+// 	FILE *f;
+// 	char buf[BUFSIZ], *p, *t;
+// 	struct dataset *s;
+// 	double d;
+// 	int line;
+// 	int i;
+
+// 	if (n == NULL) {
+// 		f = stdin;
+// 		n = "<stdin>";
+// 	} else if (!strcmp(n, "-")) {
+// 		f = stdin;
+// 		n = "<stdin>";
+// 	} else {
+// 		f = fopen(n, "r");
+// 	}
+// 	if (f == NULL)
+// 		err(1, "Cannot open %s", n);
+// 	s = NewSet();
+// 	s->name = strdup(n);
+// 	line = 0;
+// 	while (fgets(buf, sizeof buf, f) != NULL) {
+// 		line++;
+
+// 		i = strlen(buf);
+// 		if (buf[i-1] == '\n')
+// 			buf[i-1] = '\0';
+		
+// 		clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start strtok
+// 		char* nextStr = buf;
+// 		for (i = 1, t = strsep(&nextStr, delim);
+// 		     t != NULL && *t != '#';
+// 		     i++, t = strsep(&nextStr, delim)) {
+// 			if (i == column)
+// 				break;
+// 		}
+// 		clock_gettime(CLOCK_MONOTONIC, &tstop);
+// 		timeStrtok += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on strtok in seconds
+		
+// 		if (t == NULL || *t == '#')
+// 			continue;
+		
+// 		clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start strtod
+// 		d = strtod(t, &p);
+// 		clock_gettime(CLOCK_MONOTONIC, &tstop);
+// 		timeStrtod += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on strtod in seconds
+		
+// 		if (p != NULL && *p != '\0')
+// 			err(2, "Invalid data on line %d in %s\n", line, n);
+// 		if (*buf != '\0')
+// 			AddPoint(s, d);
+// 	}
+// 	fclose(f);
+// 	if (s->n < 3) {
+// 		fprintf(stderr,
+// 		    "Dataset %s must contain at least 3 data points\n", n);
+// 		exit (2);
+// 	}
+	
+// 	s->points = concatenateList(s);
+	
+// 	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start qsort
+// 	an_qsort_doubles(s->points, s->n);
+// 	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
+// 	clock_gettime(CLOCK_MONOTONIC, &tstop);
+// 	timeSort += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on qsort in seconds
+	
+// 	return (s);
+// }
+
 static void
 usage(char const *whine)
 {
