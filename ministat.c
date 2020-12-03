@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <sys/sysinfo.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #include "queue.h"
 
@@ -548,12 +549,14 @@ dbl_cmp(const void *a, const void *b)
 		return (0);
 }
 
-struct filechunk_read_payload {
+struct filechunkread_threadcontext {
 	int fd;
 	off_t filesize;
 	off_t offset;
 	int column;
 	const char* row_delim;
+	u_int64_t line_number;
+	bool line_error_flag;
 	const char* filename;
 	struct dataset* output_dataset;
 	unsigned long long timestrtod;
@@ -561,97 +564,106 @@ struct filechunk_read_payload {
 };
 
 static void 
-read_fileline_to_dataset(struct dataset *s, char* line, const char* delim, int column, const char *filename, 
-	unsigned long long *timestrtod_p, unsigned long long *timestrtok_p) {
+read_fileline_to_dataset(struct filechunkread_threadcontext* context, char* line) {
 
 	struct timespec ttstart, ttstop;
 	char *t, *p;
 	double d;
 	size_t i = strlen(line);
+	context->line_number++;
 	
 	gettime_ifflagged(&ttstart); // start time
 	char* nextStr = line;
-	for (i = 1, t = strsep(&nextStr, delim);
+	for (i = 1, t = strsep(&nextStr, context->row_delim);
 			t != NULL && *t != '#';
-			i++, t = strsep(&nextStr, delim)) {
-		if (i == column)
+			i++, t = strsep(&nextStr, context->row_delim)) {
+		if (i == context->column)
 			break;
 	}
 	gettime_ifflagged(&ttstop);
-	add_elapsed_time(timestrtok_p, &ttstart, &ttstop);  //Store amount of time spent on strtod in seconds
+	add_elapsed_time(&context->timestrtok, &ttstart, &ttstop);  //Store amount of time spent on strtod in seconds
 	
-	if (t == NULL || *t == '#')
+	if (t == NULL || *t == '#') {
 		return;
+	}
 	
 	gettime_ifflagged(&ttstart); // start time
 	d = strtod(t, &p);
 	gettime_ifflagged(&ttstop);
-	add_elapsed_time(timestrtod_p, &ttstart, &ttstop);  //Store amount of time spent on strtod in seconds
+	add_elapsed_time(&context->timestrtod, &ttstart, &ttstop);  //Store amount of time spent on strtod in seconds
 	
-	if (p != NULL && *p != '\0')
-		err(2, "Invalid data in %s\n", filename);
+	if (p != NULL && *p != '\0') {
+		context->line_error_flag = true;
+		return;
+		// err(2, "Invalid data in %s\n", context->filename);
+	}
 	if (*line != '\0')
-		AddPoint(s, d);
+		AddPoint(context->output_dataset, d);
+	return;
 }
 
-static struct dataset* 
-fill_filechunk_data(struct filechunk_read_payload* payload) {
+static void 
+fill_filechunk_data(struct filechunkread_threadcontext* context) {
 	char *next_token, *current_token, *nextStr;
 	off_t bytes_left, bytes_to_read;
 	char buffer[FILECHUNK_BUFFSIZE + 1];
 	ssize_t r;
-	struct dataset *s = NewSet();
+	context->output_dataset = NewSet();
 
-	bytes_left = payload->filesize - payload->offset;
+	bytes_left = context->filesize - context->offset;
 	bytes_to_read = (FILECHUNK_BUFFSIZE<bytes_left)?FILECHUNK_BUFFSIZE:bytes_left;
-	r = pread(payload->fd, (void*)buffer, bytes_to_read, payload->offset);
+	r = pread(context->fd, (void*)buffer, bytes_to_read, context->offset);
 	buffer[bytes_to_read] = '\0';
 	if(r == 0)
-		return s;
+		return;
 	if(r == -1) {
-		err(1, "Read error in %s\n", payload->filename);
+		err(1, "Read error in %s\n", context->filename);
 	}
 
 	nextStr = (char*)buffer;
 	current_token = strsep(&nextStr, "\n");
 
-	if(__builtin_expect(payload->offset == 0, 0)) // most of the time this condition fails so branch always predict failure
-		read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename, 
-			&payload->timestrtod, &payload->timestrtok);
+	if(__builtin_expect(context->offset == 0, 0)) { // most of the time this condition fails so branch always predict failure
+		read_fileline_to_dataset(context, current_token);
+		if(__builtin_expect(context->line_error_flag, 0))
+			return;
+	}
 
 	current_token = strsep(&nextStr, "\n");
 	while((next_token = strsep(&nextStr, "\n")) != NULL) {
-		read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename, 
-			&payload->timestrtod, &payload->timestrtok);
+		read_fileline_to_dataset(context, current_token);
+		if(__builtin_expect(context->line_error_flag, 0))
+			return;
 		current_token = next_token;
 	}
 
-	off_t lastline_offset = payload->offset + (off_t)(current_token - buffer);
-	bytes_left = payload->filesize - lastline_offset;
+	off_t lastline_offset = context->offset + (off_t)(current_token - buffer);
+	bytes_left = context->filesize - lastline_offset;
 	if (bytes_left <= 0) {
-		return s;
+		return;
 	}
 	bytes_to_read = (BUFSIZ < bytes_left)?BUFSIZ:bytes_left;
 	nextStr = (char*)buffer;
-	r = pread(payload->fd, (void*)buffer, bytes_to_read, lastline_offset);
+	r = pread(context->fd, (void*)buffer, bytes_to_read, lastline_offset);
 	buffer[bytes_to_read] = '\0';
 	if(r == 0)
-		return s;
+		return;
 	if(r == -1) {
-		err(1, "Read error in %s\n", payload->filename);
+		err(1, "Read error in %s\n", context->filename);
 	}
 
 	current_token = strsep(&nextStr, "\n");
-	read_fileline_to_dataset(s, current_token, payload->row_delim, payload->column, payload->filename, 
-		&payload->timestrtod, &payload->timestrtok);
+	read_fileline_to_dataset(context, current_token);
+	// if(context->line_error_flag)
+	// 		return;
 
-	return s;
+	return;
 }
 
 void* 
 fill_filechunk_data_thread(void* s) {
-	struct filechunk_read_payload* payload = (struct filechunk_read_payload*)s;
-	payload->output_dataset = fill_filechunk_data(payload);
+	struct filechunkread_threadcontext* payload = (struct filechunkread_threadcontext*)s;
+	fill_filechunk_data(payload);
 	return NULL;
 }
 
@@ -660,10 +672,11 @@ ReadSet(const char *n, int column, const char *delim)
 {
 	// get filehandle and filesize, and # of cpu cores
 	int fd, max_threads;
+	u_int64_t lines_read;
 	off_t  filesize, offset;
 	struct dataset *s;
 	pthread_t* threads;
-	struct filechunk_read_payload *payloads;
+	struct filechunkread_threadcontext *threadcontexts;
 	if (n == NULL || !strcmp(n, "-")) {
 		n =  "<stdin>";
 		fd = 0; // stdin
@@ -685,41 +698,48 @@ ReadSet(const char *n, int column, const char *delim)
 	s->name = strdup(n);
 	offset = 0;
 	threads = (pthread_t*)malloc(sizeof(pthread_t)*max_threads);
-	payloads = (struct filechunk_read_payload*)malloc(sizeof(struct filechunk_read_payload)*max_threads);
+	threadcontexts = (struct filechunkread_threadcontext*)malloc(sizeof(struct filechunkread_threadcontext)*max_threads);
+	lines_read = 0;
 	for(int i=0; i < max_threads; i++) {
-		payloads[i].fd = fd;
-		payloads[i].filesize = filesize;
-		payloads[i].column = column;
-		payloads[i].row_delim = delim;
-		payloads[i].filename = n;
+		threadcontexts[i].fd = fd;
+		threadcontexts[i].filesize = filesize;
+		threadcontexts[i].column = column;
+		threadcontexts[i].row_delim = delim;
+		threadcontexts[i].filename = n;
+		threadcontexts[i].line_number = 0;
+		threadcontexts[i].line_error_flag = false;
 		if(__builtin_expect(flag_vt == 1, 0)) {
-			payloads[i].timestrtod = 0;
-			payloads[i].timestrtok = 0;	
+			threadcontexts[i].timestrtod = 0;
+			threadcontexts[i].timestrtok = 0;	
 		}
 	}
 	while(offset < filesize) {
 		int threads_added;
 		for(threads_added = 0; threads_added < max_threads && offset < filesize; offset += FILECHUNK_BUFFSIZE, threads_added++) {
-			payloads[threads_added].offset = offset;
-			pthread_create(threads + threads_added, NULL, fill_filechunk_data_thread, (void*)(payloads + threads_added));
+			threadcontexts[threads_added].offset = offset;
+			pthread_create(threads + threads_added, NULL, fill_filechunk_data_thread, (void*)(threadcontexts + threads_added));
 		}
 		for(int i = 0; i < threads_added; i++) {
 			pthread_join(threads[i], NULL);
-			merge_dataset(s, payloads[i].output_dataset);
-			free(payloads[i].output_dataset); // to prevent memory leak
+			lines_read += threadcontexts[i].line_number;
+			if(threadcontexts[i].line_error_flag) {
+				err(2, "Invalid data on line %lu in %s\n", lines_read, n);
+			}
+			merge_dataset(s, threadcontexts[i].output_dataset);
+			free(threadcontexts[i].output_dataset); // to prevent memory leak
 		}
 	}
 	if(__builtin_expect(flag_vt == 1, 0)) {
 		for(int i=0; i < max_threads; i++) {
-			timeStrtod += payloads[i].timestrtod;
-			timeStrtok += payloads[i].timestrtok;
+			timeStrtod += threadcontexts[i].timestrtod;
+			timeStrtok += threadcontexts[i].timestrtok;
 		}
 	}
 
 	// free resources
 	close(fd);
 	free(threads);
-	free(payloads);
+	free(threadcontexts);
 
 	if (s->n < 3) {
 		fprintf(stderr,
