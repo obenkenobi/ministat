@@ -609,6 +609,7 @@ fill_filechunk_data(struct filechunkread_threadcontext* context) {
 	char buffer[FILECHUNK_BUFFSIZE + 1];
 	ssize_t r;
 	context->output_dataset = NewSet();
+	context->line_number = 0;
 
 	bytes_left = context->filesize - context->offset;
 	bytes_to_read = (FILECHUNK_BUFFSIZE<bytes_left)?FILECHUNK_BUFFSIZE:bytes_left;
