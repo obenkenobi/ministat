@@ -668,25 +668,19 @@ fill_filechunk_data_thread(void* s) {
 }
 
 static struct dataset *
-ReadSet(const char *n, int column, const char *delim)
-{
-	// get filehandle and filesize, and # of cpu cores
+ReadLinkedListSetParallel(const char *n, int column, const char *delim) {
 	int fd, max_threads;
 	u_int64_t lines_read;
 	off_t  filesize, offset;
 	struct dataset *s;
 	pthread_t* threads;
 	struct filechunkread_threadcontext *threadcontexts;
-	if (n == NULL || !strcmp(n, "-")) {
-		n =  "<stdin>";
-		fd = 0; // stdin
-		filesize = 0xffffffffffffffff; // max value of an unsigned 64 bit value
-	} else {
-		struct stat st;
-		stat(n, &st);
-		fd = open(n, O_RDONLY);
-		filesize = st.st_size;
-	}
+	struct stat st;
+	
+	stat(n, &st);
+	fd = open(n, O_RDONLY);
+	filesize = st.st_size;
+
 	if (fd < 0)
 		err(1, "Cannot open %s", n);
 	else if (filesize < 0) {
@@ -695,11 +689,11 @@ ReadSet(const char *n, int column, const char *delim)
 	max_threads = get_nprocs();
 	// init dataset
 	s = NewSet();
+	lines_read = 0;
 	s->name = strdup(n);
 	offset = 0;
 	threads = (pthread_t*)malloc(sizeof(pthread_t)*max_threads);
 	threadcontexts = (struct filechunkread_threadcontext*)malloc(sizeof(struct filechunkread_threadcontext)*max_threads);
-	lines_read = 0;
 	for(int i=0; i < max_threads; i++) {
 		threadcontexts[i].fd = fd;
 		threadcontexts[i].filesize = filesize;
@@ -740,6 +734,67 @@ ReadSet(const char *n, int column, const char *delim)
 	close(fd);
 	free(threads);
 	free(threadcontexts);
+	return s;
+}
+
+static struct dataset * ReadLinkedListSetStdin(int column, const char *delim) {
+	FILE *f;
+	char buf[BUFSIZ], *p, *t, *n;
+	struct dataset *s;
+	double d;
+	int line;
+	int i;
+
+	f = stdin;
+	n = "<stdin>";
+	s = NewSet();
+	s->name = strdup(n);
+	line = 0;
+	while (fgets(buf, sizeof buf, f) != NULL) {
+		line++;
+
+		i = strlen(buf);
+		if (buf[i-1] == '\n')
+			buf[i-1] = '\0';
+		
+		gettime_ifflagged(&tstart); //Timing start strtok
+		char* nextStr = buf;
+		for (i = 1, t = strsep(&nextStr, delim);
+		     t != NULL && *t != '#';
+		     i++, t = strsep(&nextStr, delim)) {
+			if (i == column)
+				break;
+		}
+		gettime_ifflagged(&tstop);
+		add_elapsed_time(&timeStrtok, &tstart, &tstop); //Store amount of time spent on strtok in seconds
+		
+		if (t == NULL || *t == '#')
+			continue;
+		
+		gettime_ifflagged(&tstart); //Timing start strtod
+		d = strtod(t, &p);
+		gettime_ifflagged(&tstop);
+		add_elapsed_time(&timeStrtod, &tstart, &tstop); //Store amount of time spent on strtod in seconds
+		
+		if (p != NULL && *p != '\0')
+			err(2, "Invalid data on line %d in %s\n", line, n);
+		if (*buf != '\0')
+			AddPoint(s, d);
+	}
+	fclose(f);
+	
+	return s;	
+}
+
+static struct dataset *
+ReadSet(const char *n, int column, const char *delim)
+{
+	struct dataset* s;
+	if (__builtin_expect(n == NULL || !strcmp(n, "-"), 0)) { // we expect most users will not use stdin
+		s = ReadLinkedListSetStdin(column, delim);
+	}  else {
+		s = ReadLinkedListSetParallel(n, column, delim);
+	}
 
 	if (s->n < 3) {
 		fprintf(stderr,
@@ -756,7 +811,7 @@ ReadSet(const char *n, int column, const char *delim)
 	# else 
 	qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
 	#endif
-
+	
 	gettime_ifflagged(&tstop);
 	add_elapsed_time(&timeSort, &tstart, &tstop);
 
