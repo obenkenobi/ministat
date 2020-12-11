@@ -803,7 +803,8 @@ ReadSet(const char *n, int column, const char *delim)
 
 	gettime_ifflagged(&tstart); // start time
 
-	an_qsort_doubles(s->points, s->n);
+	an_parallel_sort_doubles(s->points, s->n, get_nprocs());
+	// an_qsort_doubles(s->points, s->n);
 	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
 	
 	gettime_ifflagged(&tstop);
