@@ -39,6 +39,7 @@
 
 #include <stddef.h>
 #include <string.h>
+#include <pthread.h>
 
 #ifndef AN_QSORT_SUFFIX
 # error "AN_QSORT_SUFFIX undefined"
@@ -206,6 +207,83 @@ loop:
 		n = r;
 		goto loop;
 	}
+}
+
+static void
+AN_QSORT_NAME_SUFFIX(an_merge)(AN_QSORT_TYPE *a, size_t n1, size_t n2, int d){
+	AN_QSORT_TYPE *left = (AN_QSORT_TYPE *)malloc(n1*(sizeof(AN_QSORT_TYPE)));
+	AN_QSORT_TYPE *right = (AN_QSORT_TYPE *)malloc(n2*(sizeof(AN_QSORT_TYPE)));
+
+	for(size_t index = 0; index < n1; index++) {
+		left[index] = a[index];
+	}
+	for(size_t index = n1; index < n1 + n2; index++) {
+		right[index - n1] = a[index];
+	}
+	size_t k = 0, i = 0, j = 0;
+	while (i < n1 && j < n2)
+	{
+		if(AN_QSORT_CMP((void*)(left + i),(void*)(right +j)) <= 0) {
+			a[k] = left[i];
+			i++;
+		} else {
+			a[k] = right[j];
+			j++;
+		}
+		k++;
+	}
+	while(i < n1) {
+		a[k] = left[i];
+		i++;
+		k++;
+	}
+	while(j < n2) {
+		a[k] = right[j];
+		j++;
+		k++;
+	}
+	free(left);
+	free(right);
+}
+
+struct AN_QSORT_NAME_SUFFIX(an_sort_thread_payload) {
+	AN_QSORT_TYPE *a;
+	size_t n;
+	int depth;
+};
+
+static void*
+AN_QSORT_NAME_SUFFIX(an_parallel_sort_thread)(void* payload) {
+	struct AN_QSORT_NAME_SUFFIX(an_sort_thread_payload) *thread_payload = payload;
+	size_t n = thread_payload->n;
+	if(thread_payload->depth >= 1) {
+		struct AN_QSORT_NAME_SUFFIX(an_sort_thread_payload) l_payload, r_payload;
+		pthread_t l_thread, r_thread;
+		size_t m = n/2;
+		l_payload = (struct AN_QSORT_NAME_SUFFIX(an_sort_thread_payload))
+			{.a = thread_payload->a, .n = m, .depth = thread_payload->depth-1};
+		r_payload = (struct AN_QSORT_NAME_SUFFIX(an_sort_thread_payload))
+			{.a = thread_payload->a + m, .n = n - m, .depth = thread_payload->depth-1};
+		pthread_create(&l_thread, NULL, AN_QSORT_NAME_SUFFIX(an_parallel_sort_thread), &l_payload);
+		pthread_create(&r_thread, NULL, AN_QSORT_NAME_SUFFIX(an_parallel_sort_thread), &r_payload);
+		pthread_join(l_thread, NULL);
+		pthread_join(r_thread, NULL);
+		AN_QSORT_NAME_SUFFIX(an_merge)(thread_payload->a, m, n-m, thread_payload->depth);
+	} else {
+		AN_QSORT_NAME_SUFFIX(an_qsort)(thread_payload->a, n);
+	}
+	return NULL;
+}
+
+static void 
+AN_QSORT_NAME_SUFFIX(an_parallel_sort)(AN_QSORT_TYPE *a, size_t n, int n_threads) {
+	int depth=0;
+	for(int d=n_threads; d >= 1; d = d/2) depth++;
+	
+	struct AN_QSORT_NAME_SUFFIX(an_sort_thread_payload) sort_payload = 
+		(struct AN_QSORT_NAME_SUFFIX(an_sort_thread_payload))
+		{.a = a, .n = n, .depth = depth};
+	AN_QSORT_NAME_SUFFIX(an_parallel_sort_thread)(&sort_payload);
 }
 
 #undef AN_QSORT_SUFFIX
