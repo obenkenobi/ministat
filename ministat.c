@@ -52,7 +52,7 @@ static unsigned long long int timeSort = 0;
 struct timespec tstart, tstop;
 
 void gettime_ifflagged(struct timespec *tp) {
-	if(__builtin_expect(flag_vt == 1, 0)) // this ensures for branch prediction that this condition at most times fails
+	if(__builtin_expect(flag_vt == 1, false)) // this ensures for branch prediction that this condition at most times fails
 		clock_gettime(CLOCK_MONOTONIC, tp);
 }
 
@@ -65,7 +65,7 @@ static unsigned long long elapsed_us(struct timespec *a, struct timespec *b)
 }
 
 static void add_elapsed_time(unsigned long long *dest, struct timespec *a, struct timespec *b) {
-	if(__builtin_expect(flag_vt == 1, 0)) {
+	if(__builtin_expect(flag_vt == 1, false)) {
 		*dest += elapsed_us(a, b) / ITERATIONS;
 	}
 }
@@ -620,16 +620,16 @@ fill_filechunk_data(struct filechunkread_threadcontext* context) {
 	nextStr = (char*)buffer;
 	current_token = strsep(&nextStr, "\n");
 
-	if(__builtin_expect(context->offset == 0, 0)) { // most of the time this condition fails so branch always predict failure
+	if(__builtin_expect(context->offset == 0, false)) { // most of the time this condition fails so branch always predict failure
 		read_fileline_to_dataset(context, current_token);
-		if(__builtin_expect(context->line_error_flag, 0))
+		if(__builtin_expect(context->line_error_flag, false))
 			return;
 	}
 
 	current_token = strsep(&nextStr, "\n");
 	while((next_token = strsep(&nextStr, "\n")) != NULL) {
 		read_fileline_to_dataset(context, current_token);
-		if(__builtin_expect(context->line_error_flag, 0))
+		if(__builtin_expect(context->line_error_flag, false))
 			return;
 		current_token = next_token;
 	}
@@ -699,7 +699,7 @@ ReadLinkedListSetParallel(const char *n, int column, const char *delim) {
 		threadcontexts[i].filename = n;
 		threadcontexts[i].line_number = 0;
 		threadcontexts[i].line_error_flag = false;
-		if(__builtin_expect(flag_vt == 1, 0)) {
+		if(__builtin_expect(flag_vt == 1, false)) {
 			threadcontexts[i].timestrtod = 0;
 			threadcontexts[i].timestrtok = 0;	
 		}
@@ -720,7 +720,7 @@ ReadLinkedListSetParallel(const char *n, int column, const char *delim) {
 			free(threadcontexts[i].output_dataset); // to prevent memory leak
 		}
 	}
-	if(__builtin_expect(flag_vt == 1, 0)) {
+	if(__builtin_expect(flag_vt == 1, false)) {
 		for(int i=0; i < max_threads; i++) {
 			timeStrtod += threadcontexts[i].timestrtod;
 			timeStrtok += threadcontexts[i].timestrtok;
@@ -787,7 +787,7 @@ static struct dataset *
 ReadSet(const char *n, int column, const char *delim)
 {
 	struct dataset* s;
-	if (__builtin_expect(n == NULL || !strcmp(n, "-"), 0)) { // we expect most users will not use stdin
+	if (__builtin_expect(n == NULL || !strcmp(n, "-"), false)) { // we expect most users will not use stdin
 		s = ReadLinkedListSetStdin(column, delim);
 	}  else {
 		s = ReadLinkedListSetParallel(n, column, delim);
@@ -1042,7 +1042,7 @@ main(int argc, char **argv)
 	
 	unsigned long long int timeTotal = timeReadSet + timePlot + timeVitals + timeSort + timeStrtod + timeStrtok;
 	
-	if(__builtin_expect(flag_vt == 1, 0))
+	if(__builtin_expect(flag_vt == 1, false))
 		printf("\nTIMING DATA\n%llu microsecs reading set.\n%llu microsecs plotting.\n%llu microsecs reading and printing vitals.\n%llu microsecs sorting.\n%llu microsecs strtod.\n%llu microsecs strtok.\n%llu microsecs total.\n", timeReadSet, timePlot, timeVitals, timeSort, timeStrtod, timeStrtok, timeTotal);
 	
 	exit(0);
