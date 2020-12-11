@@ -217,7 +217,7 @@ struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload) {
 };
 
 static void*
-AN_QSORT_NAME_SUFFIX(copy_parallel)(void* payload) {
+AN_QSORT_NAME_SUFFIX(an_copy_parallel)(void* payload) {
 	struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload) *copy_payload = 
 		(struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload)*)payload;
 	if(copy_payload->depth >= 1) {
@@ -236,8 +236,8 @@ AN_QSORT_NAME_SUFFIX(copy_parallel)(void* payload) {
 				.n= copy_payload->n - m, .depth = copy_payload->depth - 1
 			};
 
-		pthread_create(&l_thread, NULL, AN_QSORT_NAME_SUFFIX(copy_parallel), &l_payload);
-		pthread_create(&r_thread, NULL, AN_QSORT_NAME_SUFFIX(copy_parallel), &r_payload);
+		pthread_create(&l_thread, NULL, AN_QSORT_NAME_SUFFIX(an_copy_parallel), &l_payload);
+		pthread_create(&r_thread, NULL, AN_QSORT_NAME_SUFFIX(an_copy_parallel), &r_payload);
 		pthread_join(l_thread, NULL); pthread_join(r_thread, NULL);
 
 	} else {
@@ -260,8 +260,8 @@ AN_QSORT_NAME_SUFFIX(an_merge)(AN_QSORT_TYPE *a, size_t n1, size_t n2, int depth
 	r_payload = (struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload)) 
 		{.src = a + n1, .dest = right, .n=n2, .depth = depth - 1};
 
-	AN_QSORT_NAME_SUFFIX(copy_parallel)(&l_payload);
-	AN_QSORT_NAME_SUFFIX(copy_parallel)(&r_payload);
+	AN_QSORT_NAME_SUFFIX(an_copy_parallel)(&l_payload);
+	AN_QSORT_NAME_SUFFIX(an_copy_parallel)(&r_payload);
 	
 	size_t k = 0, i = 0, j = 0;
 	while (i < n1 && j < n2)
@@ -278,13 +278,13 @@ AN_QSORT_NAME_SUFFIX(an_merge)(AN_QSORT_TYPE *a, size_t n1, size_t n2, int depth
 	if(i < n1) {
 		l_payload = (struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload)) 
 			{.src = left + i, .dest = a + k, .n=n1 - i, .depth = depth - 1};
-		AN_QSORT_NAME_SUFFIX(copy_parallel)(&l_payload);
+		AN_QSORT_NAME_SUFFIX(an_copy_parallel)(&l_payload);
 		k += n1 - i;
 	}
 	if(j < n2) {
 		l_payload = (struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload)) 
 			{.src = right + j, .dest = a + k, .n=n2 - j, .depth = depth - 1};
-		AN_QSORT_NAME_SUFFIX(copy_parallel)(&l_payload);
+		AN_QSORT_NAME_SUFFIX(an_copy_parallel)(&l_payload);
 		k += n2 - j;
 	}
 	free(left);
