@@ -31,8 +31,6 @@
 #define NSTUDENT 100
 #define NCONF 6
 
-#define USE_AN_QSORT // turns on an_qsort if uncommented
-#ifdef USE_AN_QSORT
 // setup an_qsort
 static int
 dbl_cmp(const void *a, const void *b);
@@ -42,10 +40,7 @@ dbl_cmp(const void *a, const void *b);
 #define AN_QSORT_CMP dbl_cmp
 
 #include "an_qsort.inc"
-static void 
-an_qsort_doubles(double* data, size_t data_length);
 // end setup an_qsort
-#endif
 
 int flag_vt = 0; //Verbose timing flag (set to be global)
 
@@ -808,11 +803,8 @@ ReadSet(const char *n, int column, const char *delim)
 
 	gettime_ifflagged(&tstart); // start time
 
-	#ifdef USE_AN_QSORT
 	an_qsort_doubles(s->points, s->n);
-	# else 
-	qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
-	#endif
+	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
 	
 	gettime_ifflagged(&tstop);
 	add_elapsed_time(&timeSort, &tstart, &tstop);
