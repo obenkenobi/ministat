@@ -23,6 +23,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 
+#include "strtod.h"
 #include "queue.h"
 
 #define FILECHUNK_BUFFSIZE 50*BUFSIZ // size of buffer used for large chunks of text files
