@@ -68,9 +68,22 @@
 #define AN_QSORT_NAME_SUFFIX_(NAME, SUFFIX) AN_QSORT_NAME_SUFFIX__(NAME, SUFFIX)
 #define AN_QSORT_NAME_SUFFIX(NAME) AN_QSORT_NAME_SUFFIX_(NAME, AN_QSORT_SUFFIX)
 
-AN_QSORT_TYPE min(AN_QSORT_TYPE a, AN_QSORT_TYPE b) {
-    return (AN_QSORT_CMP(&a, &b) > 0)? a:b;
-}
+#ifndef max
+#define max(a, b)					\
+	({						\
+		__typeof__(a) _a = (a);			\
+		__typeof__(b) _b = (b);			\
+		_a > _b ? _a : _b;			\
+	})
+#endif
+#ifndef min
+#define min(a, b)					\
+	({						\
+		__typeof__(a) _a = (a);			\
+		__typeof__(b) _b = (b);			\
+		_b > _a ? _a : _b;			\
+	})
+#endif
 
 AN_QSORT_HELPER_LINKAGE void
 AN_QSORT_NAME_SUFFIX(an_qsort_swapfunc)(AN_QSORT_TYPE *i, AN_QSORT_TYPE *j, ssize_t n)

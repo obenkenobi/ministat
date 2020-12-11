@@ -30,8 +30,8 @@
 #define NSTUDENT 100
 #define NCONF 6
 
-// #define USE_AN_QSORT
-#ifdef USE_AN_QSORT // an_qsort while faster ended up sacrificing much needed accuracy when calculating medians
+#define USE_AN_QSORT // turns on an_qsort if uncommented
+#ifdef USE_AN_QSORT
 // setup an_qsort
 static int
 dbl_cmp(const void *a, const void *b);
