@@ -31,13 +31,22 @@
 #define NSTUDENT 100
 #define NCONF 6
 
-// setup an_qsort
+// setup an_qsort doubles
 static int
 dbl_cmp(const void *a, const void *b);
 
 #define AN_QSORT_SUFFIX doubles
 #define AN_QSORT_TYPE double
 #define AN_QSORT_CMP dbl_cmp
+
+#include "an_qsort.inc"
+// setup an_qsort int
+static int
+int_cmp(const void *a, const void *b);
+
+#define AN_QSORT_SUFFIX ints
+#define AN_QSORT_TYPE int
+#define AN_QSORT_CMP int_cmp
 
 #include "an_qsort.inc"
 // end setup an_qsort
@@ -215,7 +224,7 @@ struct linkedListNode_int {
 	int points[LPOINTS];
 	//double sy, syy;
 	unsigned n;
-	struct linkedListNode* next;
+	struct linkedListNode_int* next;
 };
 
 static double * concatenateList(struct dataset *ds) //Turn the linked list into one big array to store in points.
@@ -242,7 +251,7 @@ static double * concatenateList_int(struct dataset_int *ds) //Turn the linked li
 {
 	int * points = malloc(ds->n * sizeof(*ds->points));
 	unsigned int points_i = 0;
-	struct linkedListNode_i * cursor;
+	struct linkedListNode_int * cursor;
 	for(cursor = ds->head; cursor != NULL; cursor = cursor->next)
 	{
 		// for(int i = 0; i < cursor->n; i++)
@@ -276,7 +285,7 @@ NewSet(void)
 static struct dataset *
 NewSet_int(void)
 {
-	struct dataset_i *ds;
+	struct dataset_int *ds;
 	struct linkedListNode_int *head;
 	
 	ds = calloc(1, sizeof *ds);
@@ -945,6 +954,46 @@ fill_filechunk_data(struct filechunkread_threadcontext* context) {
 	if(r == -1) {
 		err(1, "Read error in %s\n", context->filename);
 	}
+
+	nextStr = (char*)buffer;
+	current_token = strsep(&nextStr, "\n");
+
+	if(__builtin_expect(context->offset == 0, false)) { // most of the time this condition fails so branch always predict failure
+		read_fileline_to_dataset(context, current_token);
+		if(__builtin_expect(context->line_error_flag, false))
+			return;
+	}
+
+	current_token = strsep(&nextStr, "\n");
+	while((next_token = strsep(&nextStr, "\n")) != NULL) {
+		read_fileline_to_dataset(context, current_token);
+		if(__builtin_expect(context->line_error_flag, false))
+			return;
+		current_token = next_token;
+	}
+
+	off_t lastline_offset = context->offset + (off_t)(current_token - buffer);
+	bytes_left = context->filesize - lastline_offset;
+	if (bytes_left <= 0) {
+		return;
+	}
+	bytes_to_read = (BUFSIZ < bytes_left)?BUFSIZ:bytes_left;
+	nextStr = (char*)buffer;
+	r = pread(context->fd, (void*)buffer, bytes_to_read, lastline_offset);
+	buffer[bytes_to_read] = '\0';
+	if(r == 0)
+		return;
+	if(r == -1) {
+		err(1, "Read error in %s\n", context->filename);
+	}
+
+	current_token = strsep(&nextStr, "\n");
+	read_fileline_to_dataset(context, current_token);
+	// if(context->line_error_flag)
+	// 		return;
+
+	return;
+}
 	
 static void 
 fill_filechunk_data_int(struct filechunkread_threadcontext_int* context) {
@@ -1236,7 +1285,7 @@ static struct dataset * ReadLinkedListSetStdin_int(int column, const char *delim
 			continue;
 		
 		gettime_ifflagged(&tstart); //Timing start strtod
-		d = strtol(t, &p); //STRING TO INTEGER
+		d = strtol(t, &p, 0); //STRING TO INTEGER
 		gettime_ifflagged(&tstop);
 		add_elapsed_time(&timeStrtod, &tstart, &tstop); //Store amount of time spent on strtod in seconds
 		
@@ -1271,8 +1320,6 @@ ReadSet(const char *n, int column, const char *delim)
 	gettime_ifflagged(&tstart); // start time
 
 	an_parallel_sort_doubles(s->points, s->n, get_nprocs());
-	// an_qsort_doubles(s->points, s->n);
-	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
 	
 	gettime_ifflagged(&tstop);
 	add_elapsed_time(&timeSort, &tstart, &tstop);
@@ -1300,7 +1347,7 @@ ReadSet_int(const char *n, int column, const char *delim)
 
 	gettime_ifflagged(&tstart); // start time
 
-	an_parallel_sort_doubles(s->points, s->n, get_nprocs()); //Possible issue?
+	an_parallel_sort_ints(s->points, s->n, get_nprocs()); //Possible issue?
 	// an_qsort_doubles(s->points, s->n);
 	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
 	
@@ -1309,79 +1356,6 @@ ReadSet_int(const char *n, int column, const char *delim)
 
 	return s;
 }
-
-// static struct dataset *
-// ReadSet(const char *n, int column, const char *delim)
-// {
-// 	FILE *f;
-// 	char buf[BUFSIZ], *p, *t;
-// 	struct dataset *s;
-// 	double d;
-// 	int line;
-// 	int i;
-
-// 	if (n == NULL) {
-// 		f = stdin;
-// 		n = "<stdin>";
-// 	} else if (!strcmp(n, "-")) {
-// 		f = stdin;
-// 		n = "<stdin>";
-// 	} else {
-// 		f = fopen(n, "r");
-// 	}
-// 	if (f == NULL)
-// 		err(1, "Cannot open %s", n);
-// 	s = NewSet();
-// 	s->name = strdup(n);
-// 	line = 0;
-// 	while (fgets(buf, sizeof buf, f) != NULL) {
-// 		line++;
-
-// 		i = strlen(buf);
-// 		if (buf[i-1] == '\n')
-// 			buf[i-1] = '\0';
-		
-// 		clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start strtok
-// 		char* nextStr = buf;
-// 		for (i = 1, t = strsep(&nextStr, delim);
-// 		     t != NULL && *t != '#';
-// 		     i++, t = strsep(&nextStr, delim)) {
-// 			if (i == column)
-// 				break;
-// 		}
-// 		clock_gettime(CLOCK_MONOTONIC, &tstop);
-// 		timeStrtok += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on strtok in seconds
-		
-// 		if (t == NULL || *t == '#')
-// 			continue;
-		
-// 		clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start strtod
-// 		d = strtod(t, &p);
-// 		clock_gettime(CLOCK_MONOTONIC, &tstop);
-// 		timeStrtod += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on strtod in seconds
-		
-// 		if (p != NULL && *p != '\0')
-// 			err(2, "Invalid data on line %d in %s\n", line, n);
-// 		if (*buf != '\0')
-// 			AddPoint(s, d);
-// 	}
-// 	fclose(f);
-// 	if (s->n < 3) {
-// 		fprintf(stderr,
-// 		    "Dataset %s must contain at least 3 data points\n", n);
-// 		exit (2);
-// 	}
-	
-// 	s->points = concatenateList(s);
-	
-// 	clock_gettime(CLOCK_MONOTONIC, &tstart); //Timing start qsort
-// 	an_qsort_doubles(s->points, s->n);
-// 	// qsort(s->points, s->n, sizeof *s->points, dbl_cmp);
-// 	clock_gettime(CLOCK_MONOTONIC, &tstop);
-// 	timeSort += elapsed_us(&tstart, &tstop) / ITERATIONS; //Store amount of time spent on qsort in seconds
-	
-// 	return (s);
-// }
 
 static void
 usage(char const *whine)
@@ -1403,7 +1377,7 @@ usage(char const *whine)
 	fprintf(stderr, "\t-n : print summary statistics only, no graph/test\n");
 	fprintf(stderr, "\t-q : print summary statistics and test only, no graph\n");
 	fprintf(stderr, "\t-s : print avg/median/stddev bars on separate lines\n");
-	fprintf(stderr, "\t-t : print verbose timing data\n");
+	fprintf(stderr, "\t-v : print verbose timing data\n");
 	fprintf(stderr, "\t-w : width of graph/test output (default 74 or terminal width)\n");
 	exit (2);
 }

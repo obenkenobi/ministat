@@ -209,17 +209,60 @@ loop:
 	}
 }
 
+struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload) {
+	AN_QSORT_TYPE *src;
+	AN_QSORT_TYPE *dest;
+	size_t n;
+	int depth;
+};
+
+static void*
+AN_QSORT_NAME_SUFFIX(an_copy_parallel)(void* payload) {
+	struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload) *copy_payload = 
+		(struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload)*)payload;
+	if(copy_payload->depth >= 1) {
+		pthread_t l_thread, r_thread;
+		struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload) l_payload, r_payload;
+		size_t m = copy_payload->n/2;
+
+		l_payload = (struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload)) 
+			{
+				.src = copy_payload->src, .dest = copy_payload->dest, 
+				.n=m, .depth = copy_payload->depth - 1
+			};
+		r_payload = (struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload)) 
+			{
+				.src = copy_payload->src + m, .dest = copy_payload->dest + m, 
+				.n= copy_payload->n - m, .depth = copy_payload->depth - 1
+			};
+
+		pthread_create(&l_thread, NULL, AN_QSORT_NAME_SUFFIX(an_copy_parallel), &l_payload);
+		pthread_create(&r_thread, NULL, AN_QSORT_NAME_SUFFIX(an_copy_parallel), &r_payload);
+		pthread_join(l_thread, NULL); pthread_join(r_thread, NULL);
+
+	} else {
+		for(size_t index = 0; index < copy_payload->n; index++) {
+			copy_payload->dest[index] = copy_payload->src[index];
+		}
+	}
+	return NULL;
+}
+
 static void
-AN_QSORT_NAME_SUFFIX(an_merge)(AN_QSORT_TYPE *a, size_t n1, size_t n2, int d){
+AN_QSORT_NAME_SUFFIX(an_merge)(AN_QSORT_TYPE *a, size_t n1, size_t n2, int depth){
+	struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload) l_payload, r_payload;
+
 	AN_QSORT_TYPE *left = (AN_QSORT_TYPE *)malloc(n1*(sizeof(AN_QSORT_TYPE)));
 	AN_QSORT_TYPE *right = (AN_QSORT_TYPE *)malloc(n2*(sizeof(AN_QSORT_TYPE)));
 
-	for(size_t index = 0; index < n1; index++) {
-		left[index] = a[index];
-	}
-	for(size_t index = n1; index < n1 + n2; index++) {
-		right[index - n1] = a[index];
-	}
+	l_payload = (struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload)) 
+		{.src = a, .dest = left, .n=n1, .depth = depth - 1};
+	r_payload = (struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload)) 
+		{.src = a + n1, .dest = right, .n=n2, .depth = depth - 1};
+
+	AN_QSORT_NAME_SUFFIX(an_copy_parallel)(&l_payload);
+	AN_QSORT_NAME_SUFFIX(an_copy_parallel)(&r_payload);
+	
 	size_t k = 0, i = 0, j = 0;
 	while (i < n1 && j < n2)
 	{
@@ -232,15 +275,17 @@ AN_QSORT_NAME_SUFFIX(an_merge)(AN_QSORT_TYPE *a, size_t n1, size_t n2, int d){
 		}
 		k++;
 	}
-	while(i < n1) {
-		a[k] = left[i];
-		i++;
-		k++;
+	if(i < n1) {
+		l_payload = (struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload)) 
+			{.src = left + i, .dest = a + k, .n=n1 - i, .depth = depth - 1};
+		AN_QSORT_NAME_SUFFIX(an_copy_parallel)(&l_payload);
+		k += n1 - i;
 	}
-	while(j < n2) {
-		a[k] = right[j];
-		j++;
-		k++;
+	if(j < n2) {
+		l_payload = (struct AN_QSORT_NAME_SUFFIX(an_copy_thread_payload)) 
+			{.src = right + j, .dest = a + k, .n=n2 - j, .depth = depth - 1};
+		AN_QSORT_NAME_SUFFIX(an_copy_parallel)(&l_payload);
+		k += n2 - j;
 	}
 	free(left);
 	free(right);
@@ -266,8 +311,7 @@ AN_QSORT_NAME_SUFFIX(an_parallel_sort_thread)(void* payload) {
 			{.a = thread_payload->a + m, .n = n - m, .depth = thread_payload->depth-1};
 		pthread_create(&l_thread, NULL, AN_QSORT_NAME_SUFFIX(an_parallel_sort_thread), &l_payload);
 		pthread_create(&r_thread, NULL, AN_QSORT_NAME_SUFFIX(an_parallel_sort_thread), &r_payload);
-		pthread_join(l_thread, NULL);
-		pthread_join(r_thread, NULL);
+		pthread_join(l_thread, NULL); pthread_join(r_thread, NULL);
 		AN_QSORT_NAME_SUFFIX(an_merge)(thread_payload->a, m, n-m, thread_payload->depth);
 	} else {
 		AN_QSORT_NAME_SUFFIX(an_qsort)(thread_payload->a, n);
