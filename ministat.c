@@ -1285,7 +1285,7 @@ static struct dataset * ReadLinkedListSetStdin_int(int column, const char *delim
 			continue;
 		
 		gettime_ifflagged(&tstart); //Timing start strtod
-		d = strtol(t, &p, 0); //STRING TO INTEGER
+		d = strtol(t, &p, 10); //STRING TO INTEGER
 		gettime_ifflagged(&tstop);
 		add_elapsed_time(&timeStrtod, &tstart, &tstop); //Store amount of time spent on strtod in seconds
 		
