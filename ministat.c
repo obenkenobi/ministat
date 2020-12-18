@@ -247,7 +247,7 @@ static double * concatenateList(struct dataset *ds) //Turn the linked list into 
 	return points;
 }
 
-static double * concatenateList_int(struct dataset_int *ds) //Turn the linked list into one big array to store in points.
+static int * concatenateList_int(struct dataset_int *ds) //Turn the linked list into one big array to store in points.
 {
 	int * points = malloc(ds->n * sizeof(*ds->points));
 	unsigned int points_i = 0;
@@ -282,7 +282,7 @@ NewSet(void)
 	return(ds);
 }
 
-static struct dataset *
+static struct dataset_int *
 NewSet_int(void)
 {
 	struct dataset_int *ds;
@@ -365,7 +365,7 @@ Min(struct dataset *ds)
 	return (ds->points[0]);
 }
 
-static double
+static int
 Min_int(struct dataset_int *ds)
 {
 
@@ -379,7 +379,7 @@ Max(struct dataset *ds)
 	return (ds->points[ds->n -1]);
 }
 
-static double
+static int
 Max_int(struct dataset_int *ds)
 {
 
@@ -407,8 +407,8 @@ Median(struct dataset *ds)
 	return (ds->points[ds->n / 2]);
 }
 
-static double
-Median(struct dataset_int *ds)
+static int
+Median_int(struct dataset_int *ds)
 {
 
 	return (ds->points[ds->n / 2]);
@@ -462,7 +462,7 @@ static void
 Vitals_int(struct dataset_int *ds, int flag)
 {
 
-	printf("%c %3d %13.8g %13.8g %13.8g %13.8g %13.8g", symbol[flag],
+	printf("%c %3d %13.8d %13.8d %13.8d %13.8g %13.8g", symbol[flag],
 	    ds->n, Min_int(ds), Max_int(ds), Median_int(ds), Avg_int(ds), Stddev_int(ds));
 	printf("\n");
 }
@@ -922,7 +922,7 @@ read_fileline_to_dataset_int(struct filechunkread_threadcontext_int* context, ch
 	}
 	
 	gettime_ifflagged(&ttstart); // start time
-	d = strtoi(t, &p); //STRING TO INTEGER
+	d = atoi(t); //STRING TO INTEGER
 	gettime_ifflagged(&ttstop);
 	add_elapsed_time(&context->timestrtod, &ttstart, &ttstop);  //Store amount of time spent on strtod in seconds
 	
@@ -1018,14 +1018,14 @@ fill_filechunk_data_int(struct filechunkread_threadcontext_int* context) {
 	current_token = strsep(&nextStr, "\n");
 
 	if(__builtin_expect(context->offset == 0, false)) { // most of the time this condition fails so branch always predict failure
-		read_fileline_to_dataset(context, current_token);
+		read_fileline_to_dataset_int(context, current_token);
 		if(__builtin_expect(context->line_error_flag, false))
 			return;
 	}
 
 	current_token = strsep(&nextStr, "\n");
 	while((next_token = strsep(&nextStr, "\n")) != NULL) {
-		read_fileline_to_dataset(context, current_token);
+		read_fileline_to_dataset_int(context, current_token);
 		if(__builtin_expect(context->line_error_flag, false))
 			return;
 		current_token = next_token;
@@ -1047,7 +1047,7 @@ fill_filechunk_data_int(struct filechunkread_threadcontext_int* context) {
 	}
 
 	current_token = strsep(&nextStr, "\n");
-	read_fileline_to_dataset(context, current_token);
+	read_fileline_to_dataset_int(context, current_token);
 	// if(context->line_error_flag)
 	// 		return;
 
