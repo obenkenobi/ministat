@@ -194,7 +194,6 @@ struct dataset {
 	struct linkedListNode* tail;
 	
 	double *points;
-	// unsigned lpoints;
 	double sy, syy;
 	unsigned n;
 };
@@ -206,7 +205,6 @@ struct dataset_int {
 	struct linkedListNode_int* tail;
 	
 	int *points;
-	// unsigned lpoints;
 	double sy, syy;
 	unsigned n;
 };
@@ -215,14 +213,12 @@ struct dataset_int {
 
 struct linkedListNode {
 	double points[LPOINTS];
-	//double sy, syy;
 	unsigned n;
 	struct linkedListNode* next;
 };
 
 struct linkedListNode_int {
 	int points[LPOINTS];
-	//double sy, syy;
 	unsigned n;
 	struct linkedListNode_int* next;
 };
@@ -233,13 +229,7 @@ static double * concatenateList(struct dataset *ds) //Turn the linked list into 
 	unsigned int points_i = 0;
 	struct linkedListNode * cursor;
 	for(cursor = ds->head; cursor != NULL; cursor = cursor->next)
-	{
-		// for(int i = 0; i < cursor->n; i++)
-		// {
-		// 	points[points_i] = cursor->points[i];
-		// 	points_i++;
-		// }
-		
+	{	
 		memcpy(points + points_i, cursor->points, cursor->n*sizeof(*cursor->points));
 		points_i += cursor->n;
 	}
@@ -253,13 +243,7 @@ static int * concatenateList_int(struct dataset_int *ds) //Turn the linked list 
 	unsigned int points_i = 0;
 	struct linkedListNode_int * cursor;
 	for(cursor = ds->head; cursor != NULL; cursor = cursor->next)
-	{
-		// for(int i = 0; i < cursor->n; i++)
-		// {
-		// 	points[points_i] = cursor->points[i];
-		// 	points_i++;
-		// }
-		
+	{	
 		memcpy(points + points_i, cursor->points, cursor->n*sizeof(*cursor->points));
 		points_i += cursor->n;
 	}
@@ -336,8 +320,8 @@ AddPoint_int(struct dataset_int *ds, int a)
 	}
 	ds->tail->points[ds->tail->n++] = a;
 	ds->n++;
-	ds->sy += a;
-	ds->syy += a * a;
+	ds->sy += (double)a;
+	ds->syy += (double)a * (double)a;
 	//ds->points = concatenateList(ds);
 }
 
@@ -1493,11 +1477,13 @@ main(int argc, char **argv)
 		if (argc > (MAX_DS - 1))
 			usage("Too many datasets.");
 		nds = argc;
-		for (i = 0; i < nds; i++)
-			if(flag_i == 1)
+		if(flag_i == 1) {
+			for (i = 0; i < nds; i++)
 				ds_int[i] = ReadSet_int(argv[i], column, delim);
-			else
+		} else {
+			for (i = 0; i < nds; i++) 
 				ds[i] = ReadSet(argv[i], column, delim);
+		}
 	}
 	
 	gettime_ifflagged(&tstop);
@@ -1505,8 +1491,12 @@ main(int argc, char **argv)
 	
 	gettime_ifflagged(&tstart); //Timing start
 
-	for (i = 0; i < nds; i++) 
-		printf("%c %s\n", symbol[i+1], ds[i]->name);
+	if(flag_i == 1)
+		for (i = 0; i < nds; i++)
+			printf("%c %s\n", symbol[i+1], ds_int[i]->name);
+	else
+		for (i = 0; i < nds; i++)
+			printf("%c %s\n", symbol[i+1], ds[i]->name);
 
 	if (!flag_n && !flag_q) {
 		SetupPlot(termwidth, flag_s, nds);
