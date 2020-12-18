@@ -922,7 +922,7 @@ read_fileline_to_dataset_int(struct filechunkread_threadcontext_int* context, ch
 	}
 	
 	gettime_ifflagged(&ttstart); // start time
-	d = atoi(t); //STRING TO INTEGER
+	d = strtol(t, &p, 10); //STRING TO INTEGER
 	gettime_ifflagged(&ttstop);
 	add_elapsed_time(&context->timestrtod, &ttstart, &ttstop);  //Store amount of time spent on strtod in seconds
 	
@@ -1292,7 +1292,7 @@ static struct dataset_int * ReadLinkedListSetStdin_int(int column, const char *d
 			continue;
 		
 		gettime_ifflagged(&tstart); //Timing start strtod
-		d = atoi(p); //STRING TO INTEGER
+		d = strtol(t, &p, 10); //STRING TO INTEGER
 		gettime_ifflagged(&tstop);
 		add_elapsed_time(&timeStrtod, &tstart, &tstop); //Store amount of time spent on strtod in seconds
 		
