@@ -601,10 +601,10 @@ DimPlot(struct dataset *ds)
 static void
 DimPlot_int(struct dataset_int *ds)
 {
-	AdjPlot(Min_int(ds));
-	AdjPlot(Max_int(ds));
-	AdjPlot(Avg_int(ds) - Stddev_int(ds));
-	AdjPlot(Avg_int(ds) + Stddev_int(ds));
+	AdjPlot_int(Min_int(ds));
+	AdjPlot_int(Max_int(ds));
+	AdjPlot_int(Avg_int(ds) - Stddev_int(ds));
+	AdjPlot_int(Avg_int(ds) + Stddev_int(ds));
 }
 
 static void
@@ -1061,6 +1061,13 @@ fill_filechunk_data_thread(void* s) {
 	return NULL;
 }
 
+void* 
+fill_filechunk_data_thread_int(void* s) {
+	struct filechunkread_threadcontext_int* payload = (struct filechunkread_threadcontext_int*)s;
+	fill_filechunk_data_int(payload);
+	return NULL;
+}
+
 static struct dataset *
 ReadLinkedListSetParallel(const char *n, int column, const char *delim) {
 	int fd, max_threads;
@@ -1131,14 +1138,14 @@ ReadLinkedListSetParallel(const char *n, int column, const char *delim) {
 	return s;
 }
 
-static struct dataset *
+static struct dataset_int *
 ReadLinkedListSetParallel_int(const char *n, int column, const char *delim) {
 	int fd, max_threads;
 	u_int64_t lines_read;
 	off_t  filesize, offset;
-	struct dataset *s;
+	struct dataset_int *s;
 	pthread_t* threads;
-	struct filechunkread_threadcontext *threadcontexts;
+	struct filechunkread_threadcontext_int *threadcontexts;
 	struct stat st;
 	
 	stat(n, &st);
@@ -1157,7 +1164,7 @@ ReadLinkedListSetParallel_int(const char *n, int column, const char *delim) {
 	s->name = strdup(n);
 	offset = 0;
 	threads = (pthread_t*)malloc(sizeof(pthread_t)*max_threads);
-	threadcontexts = (struct filechunkread_threadcontext*)malloc(sizeof(struct filechunkread_threadcontext)*max_threads);
+	threadcontexts = (struct filechunkread_threadcontext_int*)malloc(sizeof(struct filechunkread_threadcontext_int)*max_threads);
 	for(int i=0; i < max_threads; i++) {
 		threadcontexts[i].fd = fd;
 		threadcontexts[i].filesize = filesize;
@@ -1175,7 +1182,7 @@ ReadLinkedListSetParallel_int(const char *n, int column, const char *delim) {
 		int threads_added;
 		for(threads_added = 0; threads_added < max_threads && offset < filesize; offset += FILECHUNK_BUFFSIZE, threads_added++) {
 			threadcontexts[threads_added].offset = offset;
-			pthread_create(threads + threads_added, NULL, fill_filechunk_data_thread, (void*)(threadcontexts + threads_added));
+			pthread_create(threads + threads_added, NULL, fill_filechunk_data_thread_int, (void*)(threadcontexts + threads_added));
 		}
 		for(int i = 0; i < threads_added; i++) {
 			pthread_join(threads[i], NULL);
@@ -1183,7 +1190,7 @@ ReadLinkedListSetParallel_int(const char *n, int column, const char *delim) {
 			if(threadcontexts[i].line_error_flag) {
 				err(2, "Invalid data on line %lu in %s\n", lines_read, n);
 			}
-			merge_dataset(s, threadcontexts[i].output_dataset);
+			merge_dataset_int(s, threadcontexts[i].output_dataset);
 			free(threadcontexts[i].output_dataset); // to prevent memory leak
 		}
 	}
@@ -1250,7 +1257,7 @@ static struct dataset * ReadLinkedListSetStdin(int column, const char *delim) {
 	return s;	
 }
 
-static struct dataset * ReadLinkedListSetStdin_int(int column, const char *delim) {
+static struct dataset_int * ReadLinkedListSetStdin_int(int column, const char *delim) {
 	FILE *f;
 	char buf[BUFSIZ], *p, *t, *n;
 	struct dataset_int *s;
@@ -1285,7 +1292,7 @@ static struct dataset * ReadLinkedListSetStdin_int(int column, const char *delim
 			continue;
 		
 		gettime_ifflagged(&tstart); //Timing start strtod
-		d = strtol(t, &p, 10); //STRING TO INTEGER
+		d = atoi(p); //STRING TO INTEGER
 		gettime_ifflagged(&tstop);
 		add_elapsed_time(&timeStrtod, &tstart, &tstop); //Store amount of time spent on strtod in seconds
 		
@@ -1327,7 +1334,7 @@ ReadSet(const char *n, int column, const char *delim)
 	return s;
 }
 
-static struct dataset *
+static struct dataset_int *
 ReadSet_int(const char *n, int column, const char *delim)
 {
 	struct dataset_int* s;
@@ -1374,6 +1381,7 @@ usage(char const *whine)
 	fprintf(stderr, "}\n");
 	fprintf(stderr, "\t-C : column number to extract (starts and defaults to 1)\n");
 	fprintf(stderr, "\t-d : delimiter(s) string, default to \" \\t\"\n");
+	fprintf(stderr, "\t-i : Set to integer mode (floating point mode is default)");
 	fprintf(stderr, "\t-n : print summary statistics only, no graph/test\n");
 	fprintf(stderr, "\t-q : print summary statistics and test only, no graph\n");
 	fprintf(stderr, "\t-s : print avg/median/stddev bars on separate lines\n");
@@ -1389,7 +1397,7 @@ main(int argc, char **argv)
 	struct dataset_int *ds_int[7];
 	int nds;
 	double a;
-	int a_int;
+	// int a_int;
 	const char *delim = " \t";
 	char *p;
 	int c, i, ci;
@@ -1509,7 +1517,7 @@ main(int argc, char **argv)
 				DimPlot(ds[i]);
 		for (i = 0; i < nds; i++)
 			if(flag_i == 1)
-				PlotSet_int(ds_int, i + 1);
+				PlotSet_int(ds_int[i], i + 1);
 			else
 				PlotSet(ds[i], i + 1);
 		DumpPlot();
