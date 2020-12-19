@@ -1,0 +1,28 @@
+version,filesize (Megabytes),time (seconds),additional info
+original,50,3.593,
+original,100,7.337,
+original,150,12.108,
+strtok_faster,50,4.761,
+strtok_faster,100,9.589,
+strtok_faster,150,14.622,
+an_qsort_original,50,2.796,
+an_qsort_original,100,5.832,
+an_qsort_original,150,8.916,
+time_with_dataset_linked_list,50,84.289,
+time_with_dataset_linked_list,100,166.388,
+time_with_dataset_linked_list,150,236.516,
+read_parallel,50,2.58,
+read_parallel,100,5.146,
+read_parallel,150,7.625,
+fix_an_qsort,50,1.281,
+fix_an_qsort,100,2.544,
+fix_an_qsort,150,3.704,
+parallel_sort,50,0.785,
+parallel_sort,100,1.551,
+parallel_sort,150,2.246,
+integer_mode,50,0.746,
+integer_mode_i_enabled,50,0.482,integer enabled with the -i flag
+integer_mode,100,1.423,
+integer_mode_i_enabled,100,0.917,integer enabled with the -i flag
+integer_mode,150,2.1,
+integer_mode_i_enabled,150,1.323,integer enabled with the -i flag

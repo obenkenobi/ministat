@@ -1,0 +1,19 @@
+Here are the github release versions: https://github.com/OrenBen-Meir/ministat
+
+The timing data is in timing.csv
+You will notice the github release versions are in the 'version'. 
+The exception is integer_mode_i_enabled which is for the integer-mode release where integer mode is enabled.
+All other timings do not use integer mode.
+
+Timing is done with the command: time ministat -q some_file.txt
+
+The flamegraphs are generally in the form <github_release_version>.svg where integer mode is not used.
+The flamegraph for when integer mode is enabled is integer_mode_i_enabled.svg
+
+
+Here is what I used for the perf command when generating a flamegraph, 
+this was from a shell script I ran, ${ministat_path} is the path to the ministat program 
+and ${ministat_version} is some arbitrary name for the svg file to store the flamegraph.
+
+perf record -F 99 -g ${ministat_path} -n ./desktop.txt ./game.txt
+perf script | ./FlameGraph/stackcollapse-perf.pl | ./FlameGraph/flamegraph.pl > "graphs/${ministat_version}.svg"
