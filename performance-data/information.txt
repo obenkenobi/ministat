@@ -7,6 +7,9 @@ All other timings do not use integer mode.
 
 Timing is done with the command: time ministat -q some_file.txt
 
+The filea used for timing are single column and have 4 digit integers.
+The files used for flamegraph generation are desktop.txt, and game.txt
+
 The flamegraphs are generally in the form <github_release_version>.svg where integer mode is not used.
 The flamegraph for when integer mode is enabled is integer_mode_i_enabled.svg
 
