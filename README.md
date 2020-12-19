@@ -59,8 +59,12 @@ From the FreeBSD [man page](http://www.freebsd.org/cgi/man.cgi?ministat)
 	No difference proven at 95.0% confidence
 ## Performance Information
 ![](https://raw.githubusercontent.com/OrenBen-Meir/ministat/master/performance-data/graphs/Timing%20Data%20By%20Version.png)
-Above is a timing plot for each ministat version. The latest is *integer-mode* if integer mode is enabled with the -i flag, otherwise the performance od *parallel_sort* is achieved.
-We will break down each version based on the timing plot:
+Above is a timing plot for each ministat version. The latest version is *integer-mode* if integer mode is enabled with the -i flag, otherwise the performance od *parallel_sort* is achieved.
+The data is timed using single column files with 4 digit integers. The command used by ministat for timing is:
+```
+time ministat -q some_file.txt
+```
+We will break down each version used on the timing plot:
 
 - **Original**: The original unoptimized ministat.
 - **Strtok**: New string tokenization. More tests shown it to be slower than the original strtok in a single threaded program in spite of the tag name. However it is thread friendly unlike the original as it can be used without relying on mutexes unlike the original which prevents contention. This gives better performance in a multi-threaded setting.
@@ -70,7 +74,12 @@ We will break down each version based on the timing plot:
 - **parallel_sort**: Rarallelization is added on top of an_qsort for better performance when sorting. 
 - **integer_mode**: Integer mode is added which has boosted performance. Without integer mode, ministat has a similar performance to the *parallel_sort* version. This was achieved by rewriting much of the available functions specifically. However to be maintainable in the long run, using macros similar to an_qsort would be ideal.
 
-In addition, there is a version called **time_with_dataset_linked_list** which while not timed, has a much worse performance. A rolling linked and an option to add verbose timing for certain features is added. However no other feature is added in comparison to the original version. However due to the computation for timing is done regardless of if the timing option is enabled signifigantly reducing performance. The option only allows you to just display already computed timing. This was fixed in **read_parallel** version where timing is only computed if the option is enabled. Otherwise, it is ignored and certain optimizations are built in so that ministat generally assumes timing is turned off as this feature will only be seldomly used. This is done through biasing branch predictions made by the cpu against computing and displaying timing data. 
+In addition, there is a version called **time_with_dataset_linked_list** which while not timed, has a much worse performance. A rolling linked and an option to add verbose timing for certain features is added. However no other feature is added in comparison to the original version. However due to the computation for timing is done regardless of if the timing option is enabled signifigantly reducing performance. You will see that in it's flamegraph, getting timing data consumes almost 95% of the time. The option only allows you to just display already computed timing. This was fixed in **read_parallel** version where timing is only computed if the option is enabled. Otherwise, it is ignored and certain optimizations are built in so that ministat generally assumes timing is turned off as this feature will only be seldomly used. This is done through biasing branch predictions made by the cpu against computing and displaying timing data. 
+
+The flamegraphs for each version are created using this command for ministat:
+```
+ministat -n ./some_large_file.txt ./some_large_file2.txt
+```
 
 Here are the links to the flame graphs for each version and how to download with curl on your terminal:
 - [original](https://raw.githubusercontent.com/OrenBen-Meir/ministat/master/performance-data/graphs/original.svg)
