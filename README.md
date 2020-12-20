@@ -81,7 +81,7 @@ We will break down each version used for ministat, most of which are plotted:
 - **parallel_sort**: Rarallelization is added on top of an_qsort for better performance when sorting. 
 - **integer_mode**: Integer mode is added which has boosted performance. Without integer mode, ministat has a similar performance to the *parallel_sort* version. This was achieved by rewriting much of the available functions specifically. However to be maintainable in the long run, using macros similar to an_qsort would be ideal.
 - **new_strtod**: Faster version of strtod giving a slight performance boost. 
-- **final_version**: -o3 flag added decreasing the timing from the original by 9%
+- **final_version**: -o3 flag added decreasing the timing from previous versions by 9%. This is the current version!
 
 The flamegraphs for each version are created using this command for ministat:
 ```
