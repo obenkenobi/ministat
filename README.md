@@ -73,6 +73,7 @@ We will break down each version used on the timing plot:
 - **fix_an_qsort**: Fixed an_qsort on top of parallel file reading with raw I/O. A much bigger performance boost is added as a result.
 - **parallel_sort**: Rarallelization is added on top of an_qsort for better performance when sorting. 
 - **integer_mode**: Integer mode is added which has boosted performance. Without integer mode, ministat has a similar performance to the *parallel_sort* version. This was achieved by rewriting much of the available functions specifically. However to be maintainable in the long run, using macros similar to an_qsort would be ideal.
+- **new_strtod**: Faster version of strtod giving a slight performance boost
 
 In addition, there is a version called **time_with_dataset_linked_list** which while not timed, has a much worse performance. A rolling linked and an option to add verbose timing for certain features is added. However no other feature is added in comparison to the original version. However due to the computation for timing is done regardless of if the timing option is enabled signifigantly reducing performance. You will see that in it's flamegraph, getting timing data consumes almost 95% of the time. The option only allows you to just display already computed timing. This was fixed in **read_parallel** version where timing is only computed if the option is enabled. Otherwise, it is ignored and certain optimizations are built in so that ministat generally assumes timing is turned off as this feature will only be seldomly used. This is done through biasing branch predictions made by the cpu against computing and displaying timing data. 
 
@@ -117,4 +118,8 @@ curl https://raw.githubusercontent.com/OrenBen-Meir/ministat/master/performance-
 - [integer mode (integer mode enabled)](https://raw.githubusercontent.com/OrenBen-Meir/ministat/master/performance-data/graphs/integer_mode_i_enabled.svg)
 ```
 curl https://raw.githubusercontent.com/OrenBen-Meir/ministat/master/performance-data/graphs/integer_mode_i_enabled.svg -o integer_mode_i_enabled.svg
+```
+- [new_strtod](https://raw.githubusercontent.com/OrenBen-Meir/ministat/master/performance-data/graphs/new_strtod.svg)
+```
+curl https://raw.githubusercontent.com/OrenBen-Meir/ministat/master/performance-data/graphs/new_strtod.svg -o new_strtod.svg
 ```
