@@ -26,3 +26,6 @@ integer_mode,100,1.423,
 integer_mode_i_enabled,100,0.917,integer enabled with the -i flag
 integer_mode,150,2.1,
 integer_mode_i_enabled,150,1.323,integer enabled with the -i flag
+new_strtod,50,0.704,
+new_strtod,100,1.417,
+new_strtod,150,2.069,
