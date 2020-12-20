@@ -61,7 +61,7 @@ From the FreeBSD [man page](http://www.freebsd.org/cgi/man.cgi?ministat)
 Performance testing is done on a linux server with a 6 core cpu.
 
 ![](https://raw.githubusercontent.com/OrenBen-Meir/ministat/master/performance-data/graphs/Timing%20Data%20By%20Version.png)
-Above is a timing plot for each ministat version. The latest version plotted is *new_strtod*, *integer-mode* version in the plot describes ministat with the -i flag enabled (i.e. integer mode is enabled), it has the same performance as the -i flag for *new_strtod* as that version only affected floating point mode which is default. While not plotted, *final_version* is the current version which compiles ministat with the -o3 flag giving it a 9% boost in speed over previous versions.
+Above is a timing plot for each ministat version. The latest version is *final_version* is the current version which compiles ministat with the -o3 flag giving it a 9% boost in speed over previous versions, *new_strtod* and *integer-mode*. 
 
 The data is timed using single column files with 4 digit integers. The command used by ministat for timing is:
 ```
