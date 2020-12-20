@@ -1,6 +1,6 @@
 BIN = ministat 
-SRCS= ministat.c
-OBJS= ministat.o
+SRCS= ministat.c strtod.c
+OBJS= ministat.o strtod.o
 
 PKGS = 
 
