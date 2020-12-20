@@ -58,10 +58,13 @@ From the FreeBSD [man page](http://www.freebsd.org/cgi/man.cgi?ministat)
 	+   5	  150	     930	500	   540	  299.08193
 	No difference proven at 95.0% confidence
 ## Performance Information
-Performance testing is done on a linux server with a 6 core cpu.
+Performance testing is done on a linux server with an Intel(R) Xeon(R) CPU E5-2697 v4 @ 2.30GHz cpu with 6 cores.
 
+The latest version of ministat is *final_version* is the current version which compiles ministat with the -o3 flag giving it a 9% boost in speed over previous versions, *new_strtod* and *integer-mode*. 
+All tining data is recorded in this csv file: ![link to the csv file](https://github.com/OrenBen-Meir/ministat/blob/master/performance-data/timing.csv)
+
+Below is a timing plot for most ministat versions. 
 ![](https://raw.githubusercontent.com/OrenBen-Meir/ministat/master/performance-data/graphs/Timing%20Data%20By%20Version.png)
-Above is a timing plot for each ministat version. The latest version is *final_version* is the current version which compiles ministat with the -o3 flag giving it a 9% boost in speed over previous versions, *new_strtod* and *integer-mode*. 
 
 The data is timed using single column files with 4 digit integers. The command used by ministat for timing is:
 ```
