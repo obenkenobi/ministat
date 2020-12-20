@@ -59,7 +59,8 @@ From the FreeBSD [man page](http://www.freebsd.org/cgi/man.cgi?ministat)
 	No difference proven at 95.0% confidence
 ## Performance Information
 ![](https://raw.githubusercontent.com/OrenBen-Meir/ministat/master/performance-data/graphs/Timing%20Data%20By%20Version.png)
-Above is a timing plot for each ministat version. The latest version is *integer-mode* if integer mode is enabled with the -i flag, otherwise the performance od *parallel_sort* is achieved.
+Above is a timing plot for each ministat version. The latest version is *new_strtod*, *integer-mode* version in the plot describes ministat with the -i flag enabled (i.e. integer mode is enabled), it has the same performance as the -i flag for *new_strtod* as that version only affected floating point mode which is default.
+
 The data is timed using single column files with 4 digit integers. The command used by ministat for timing is:
 ```
 time ministat -q some_file.txt
