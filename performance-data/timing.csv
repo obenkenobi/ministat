@@ -32,6 +32,6 @@ new_strtod,150,2.069,
 final_version,50,0.646,
 final_version,100,1.317,
 final_version,150,1.873,
-final_version (integer mode),50,0.536,integer enabled with the -i flag,
-final_version (integer mode),100,1.035,integer enabled with the -i flag,
-final_version (integer mode),150,1.551,integer enabled with the -i flag,
+final_version (integer mode),50,0.536,integer enabled with the -i flag
+final_version (integer mode),100,1.035,integer enabled with the -i flag
+final_version (integer mode),150,1.551,integer enabled with the -i flag
