@@ -867,7 +867,7 @@ read_fileline_to_dataset(struct filechunkread_threadcontext* context, char* line
 	}
 	
 	gettime_ifflagged(&ttstart); // start time
-	d = strtod(t, &p);
+	d = vim_strtod(t, &p);
 	gettime_ifflagged(&ttstop);
 	add_elapsed_time(&context->timestrtod, &ttstart, &ttstop);  //Store amount of time spent on strtod in seconds
 	
@@ -1227,7 +1227,7 @@ static struct dataset * ReadLinkedListSetStdin(int column, const char *delim) {
 			continue;
 		
 		gettime_ifflagged(&tstart); //Timing start strtod
-		d = strtod(t, &p);
+		d = vim_strtod(t, &p);
 		gettime_ifflagged(&tstop);
 		add_elapsed_time(&timeStrtod, &tstart, &tstop); //Store amount of time spent on strtod in seconds
 		
@@ -1419,7 +1419,7 @@ main(int argc, char **argv)
 				usage("Column number should be positive.");
 			break;
 		case 'c':
-			a = strtod(optarg, &p);
+			a = vim_strtod(optarg, &p);
 			if (p != NULL && *p != '\0')
 				usage("Not a floating point number");
 			for (i = 0; i < NCONF; i++)
