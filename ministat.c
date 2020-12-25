@@ -1365,7 +1365,7 @@ usage(char const *whine)
 	fprintf(stderr, "}\n");
 	fprintf(stderr, "\t-C : column number to extract (starts and defaults to 1)\n");
 	fprintf(stderr, "\t-d : delimiter(s) string, default to \" \\t\"\n");
-	fprintf(stderr, "\t-i : Set to integer mode (floating point mode is default)");
+	fprintf(stderr, "\t-i : Set to integer mode (floating point mode is default)\n");
 	fprintf(stderr, "\t-n : print summary statistics only, no graph/test\n");
 	fprintf(stderr, "\t-q : print summary statistics and test only, no graph\n");
 	fprintf(stderr, "\t-s : print avg/median/stddev bars on separate lines\n");
