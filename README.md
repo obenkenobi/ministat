@@ -1,8 +1,7 @@
 # ministat
 A small tool to do the statistics legwork on benchmarks etc.
 
-Written by Poul-Henning Kamp, lured into a dark Linux alley and clubbed over the head and hauled away to Github by yours truly. 
-This is a fork of his repo.
+Written by Poul-Henning Kamp, lured into a dark Linux alley and clubbed over the head and hauled away to Github to be forked by yours truly.
 
 ## Build & Install
 
